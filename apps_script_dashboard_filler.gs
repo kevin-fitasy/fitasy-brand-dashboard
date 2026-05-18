@@ -265,7 +265,7 @@ function pullGoogleAdsCampaigns() {
 // ============================ Sentiment + Mentions (from existing sheet) ============================
 
 function pullSentiment() {
-  const src = SpreadsheetApp.openById(MENTIONS_SHEET_ID).getSheets()[0];
+  const src = SpreadsheetApp.openById(MENTIONS_SHEET_ID).getSheetByName('Mentions');
   const data = src.getDataRange().getValues();
   const headers = data[0];
   const dateIdx = headers.indexOf('Date');
@@ -295,7 +295,7 @@ function pullSentiment() {
 }
 
 function pullMentions() {
-  const src = SpreadsheetApp.openById(MENTIONS_SHEET_ID).getSheets()[0];
+  const src = SpreadsheetApp.openById(MENTIONS_SHEET_ID).getSheetByName('Mentions');
   const data = src.getDataRange().getValues();
   const headers = data[0];
   const idx = key => headers.indexOf(key);
@@ -329,7 +329,7 @@ function pullMentions() {
 
 function countMentions() {
   try {
-    const src = SpreadsheetApp.openById(MENTIONS_SHEET_ID).getSheets()[0];
+    const src = SpreadsheetApp.openById(MENTIONS_SHEET_ID).getSheetByName('Mentions');
     const data = src.getDataRange().getValues();
     const headers = data[0];
     const dateIdx = headers.indexOf('Date');
