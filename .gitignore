@@ -1,0 +1,24 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Node (if ever needed)
+node_modules/
+.env
+.env.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# Python (local dev server)
+__pycache__/
+*.pyc

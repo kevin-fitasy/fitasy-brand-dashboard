@@ -1,0 +1,22 @@
+# Netlify config for Fitasy Brand Dashboard
+# Drop this file at the repo root alongside dashboard.html.
+
+[build]
+  publish = "."
+  command = ""   # no build step — static HTML
+
+# Rewrite root → dashboard.html so dashboard.fitasy.ai serves the file
+[[redirects]]
+  from = "/"
+  to = "/dashboard.html"
+  status = 200
+
+# Headers
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options          = "DENY"
+    X-Content-Type-Options   = "nosniff"
+    Referrer-Policy          = "strict-origin-when-cross-origin"
+    # Cache HTML for a short window so refreshes pick up updates fast
+    Cache-Control            = "public, max-age=300, must-revalidate"

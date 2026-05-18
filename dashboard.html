@@ -1,0 +1,1003 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Fitasy · Brand Performance Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<style>
+  :root {
+    --bg: #FFFFF6;            /* Fitasy cream */
+    --surface: #ffffff;
+    --ink: #000000;
+    --ink-2: #3c4a51;
+    --ink-3: #5f7c8e;
+    --muted: #91a5a6;
+    --soft: #d5d0a3;
+    --highlight: #b0a778;
+    --neutral: #807e71;
+    --line: #ece9d8;
+    --line-2: #e8e3d0;
+    --good: #5a7d5a;
+    --warn: #b0a778;
+    --bad: #a35a4f;
+    --paid: #3c4a51;          /* brand deep slate — Paid */
+    --organic: #b0a778;       /* brand highlight gold — Organic */
+    --organic-deep: #8d8460;  /* darker gold for gradients */
+    --positive: #91a5a6;      /* brand muted sage — positive sentiment */
+    --shadow: 0 1px 2px rgba(60,74,81,.04), 0 4px 24px rgba(60,74,81,.06);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', -apple-system, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .serif { font-family: 'Playfair Display', Georgia, serif; }
+  a { color: inherit; }
+
+  /* === Top bar (sticky) === */
+  header.topbar {
+    position: sticky; top: 0; z-index: 50;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+    padding: 14px 32px;
+    display: flex; align-items: center; gap: 16px;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-mark {
+    width: 32px; height: 32px; border-radius: 4px;
+    background: var(--ink); color: var(--bg);
+    display: grid; place-items: center;
+    font-family: 'Playfair Display', serif;
+    font-weight: 700; font-size: 18px; letter-spacing: -0.02em;
+  }
+  .brand-name { font-family: 'Playfair Display', serif; font-size: 18px; letter-spacing: -0.01em; }
+  .brand-sub { color: var(--ink-3); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; margin-left: 4px; }
+  .filters { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    font-size: 12px; color: var(--ink-2);
+    cursor: pointer;
+    transition: all .15s ease;
+    text-decoration: none;
+  }
+  .pill:hover { border-color: var(--ink-3); }
+  .pill.active { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .pill.status { font-size: 11px; padding: 4px 10px; }
+  .pill.status .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+  .pill.status.live .dot { background: var(--good); animation: pulse 2s infinite; }
+  .pill.status.stale .dot { background: var(--warn); }
+  .pill.status.error .dot { background: var(--bad); }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  /* === Main vertical scroll === */
+  main {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 32px;
+  }
+
+  /* === Section card === */
+  section.section {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 28px 32px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow);
+  }
+  .section-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 24px; gap: 16px; flex-wrap: wrap; }
+  .section-head h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px; font-weight: 500;
+    margin: 0; letter-spacing: -0.01em;
+  }
+  .section-head .meta {
+    color: var(--ink-3); font-size: 11px;
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .section-head .link {
+    color: var(--ink-3); font-size: 12px;
+    text-decoration: none; border-bottom: 1px solid var(--line);
+    padding-bottom: 1px;
+    transition: all .15s;
+  }
+  .section-head .link:hover { color: var(--ink); border-color: var(--ink); }
+  .section-head .link::after { content: " ↗"; font-size: 10px; }
+
+  /* === KPI grid === */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+  }
+  .kpi {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 24px 20px;
+    background: var(--bg);
+    position: relative;
+    transition: all .15s;
+  }
+  .kpi:hover { border-color: var(--ink-3); }
+  .kpi .value {
+    font-family: 'Playfair Display', serif;
+    font-size: 36px; font-weight: 500;
+    line-height: 1.1; letter-spacing: -0.02em;
+    color: var(--ink);
+    margin-bottom: 6px;
+  }
+  .kpi .label {
+    font-size: 12px; color: var(--ink-3);
+    letter-spacing: 0.04em; text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .kpi .meta {
+    font-size: 11px; color: var(--muted);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .kpi .delta {
+    font-size: 11px;
+    padding: 2px 8px; border-radius: 999px;
+    font-weight: 500;
+    display: inline-block;
+  }
+  .kpi .delta.up { background: rgba(90,125,90,.12); color: var(--good); }
+  .kpi .delta.down { background: rgba(163,90,79,.12); color: var(--bad); }
+  .kpi .delta.flat { background: rgba(128,126,113,.12); color: var(--neutral); }
+
+  /* === Organic vs Paid: split layout === */
+  .ovp-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+  .ovp-card {
+    border-radius: 12px;
+    padding: 28px;
+    position: relative;
+    overflow: hidden;
+    color: white;
+  }
+  .ovp-card.organic { background: linear-gradient(135deg, var(--organic), var(--organic-deep)); }
+  .ovp-card.paid { background: linear-gradient(135deg, var(--paid), #2a3438); }
+  .ovp-card .tag {
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+    opacity: .8; margin-bottom: 12px;
+  }
+  .ovp-card .headline {
+    font-family: 'Playfair Display', serif;
+    font-size: 48px; font-weight: 500;
+    letter-spacing: -0.02em; line-height: 1;
+    margin-bottom: 8px;
+  }
+  .ovp-card .sub {
+    font-size: 13px; opacity: .85; margin-bottom: 24px;
+  }
+  .ovp-card .row {
+    display: flex; justify-content: space-between;
+    padding: 10px 0;
+    border-top: 1px solid rgba(255,255,255,.15);
+    font-size: 13px;
+  }
+  .ovp-card .row .v { opacity: .95; font-weight: 500; }
+  .ovp-card .row .l { opacity: .7; }
+  .ovp-chart-wrap {
+    margin-top: 20px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 20px;
+    background: var(--bg);
+  }
+  .ovp-chart-wrap .chart-title { font-size: 12px; color: var(--ink-3); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 12px; }
+
+  /* === Column layouts === */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .grid-2-1 { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+
+  /* === Charts === */
+  .chart-wrap { position: relative; height: 280px; }
+  .chart-wrap.tall { height: 360px; }
+  .chart-wrap.short { height: 200px; }
+
+  /* === Tables === */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table thead th {
+    text-align: left; padding: 10px 12px;
+    color: var(--ink-3); font-weight: 500;
+    font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+    border-bottom: 1px solid var(--line);
+  }
+  table tbody td {
+    padding: 12px;
+    border-bottom: 1px solid var(--line);
+    color: var(--ink-2);
+  }
+  table tbody tr:hover td { background: var(--bg); }
+  table .num { text-align: right; font-variant-numeric: tabular-nums; }
+  table .pill-mini {
+    display: inline-block;
+    font-size: 11px; padding: 2px 8px; border-radius: 999px;
+    background: var(--line); color: var(--ink-2);
+  }
+  table .pill-mini.organic { background: rgba(176,167,120,.20); color: var(--organic-deep); }
+  table .pill-mini.paid { background: rgba(60,74,81,.15); color: var(--paid); }
+  table .pill-mini.direct { background: rgba(145,165,166,.20); color: var(--ink-3); }
+  table .bar {
+    display: inline-block; height: 4px; border-radius: 999px;
+    background: var(--organic); vertical-align: middle;
+  }
+
+  /* === Sentiment chips === */
+  .sentiment-card {
+    display: flex; align-items: center; gap: 16px;
+    padding: 16px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--bg);
+    margin-bottom: 12px;
+    text-decoration: none;
+    color: inherit;
+    transition: all .15s;
+  }
+  .sentiment-card:hover { border-color: var(--ink-3); transform: translateY(-1px); }
+  .sentiment-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .sentiment-dot.positive { background: var(--good); }
+  .sentiment-dot.neutral { background: var(--muted); }
+  .sentiment-dot.negative { background: var(--bad); }
+  .sentiment-meta { flex: 1; min-width: 0; }
+  .sentiment-source { font-size: 11px; color: var(--ink-3); letter-spacing: 0.04em; text-transform: uppercase; }
+  .sentiment-title { font-size: 13px; color: var(--ink); margin: 2px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sentiment-date { font-size: 11px; color: var(--muted); }
+
+  /* === Detail links footer === */
+  .detail-links {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-top: 8px;
+  }
+  .detail-link {
+    display: flex; flex-direction: column; gap: 6px;
+    padding: 18px 20px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    text-decoration: none;
+    color: var(--ink);
+    transition: all .15s;
+    background: var(--bg);
+  }
+  .detail-link:hover {
+    border-color: var(--ink);
+    transform: translateY(-1px);
+  }
+  .detail-link .lbl {
+    font-size: 11px; color: var(--ink-3);
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .detail-link .name { font-size: 15px; font-weight: 500; }
+  .detail-link .name::after { content: " ↗"; font-size: 11px; color: var(--ink-3); }
+  .detail-link .desc { font-size: 12px; color: var(--ink-3); }
+
+  /* === Banner === */
+  .banner-strip {
+    background: linear-gradient(135deg, var(--ink), var(--ink-2));
+    color: var(--bg);
+    border-radius: 16px;
+    padding: 24px 32px;
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 24px;
+  }
+  .banner-strip .left { display: flex; align-items: center; gap: 16px; }
+  .banner-strip h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 24px; font-weight: 500; margin: 0;
+    letter-spacing: -0.01em;
+  }
+  .banner-strip .sub { font-size: 12px; opacity: .7; letter-spacing: 0.04em; text-transform: uppercase; margin-top: 4px; }
+  .banner-strip .right { display: flex; align-items: center; gap: 24px; }
+  .banner-stat .v { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 500; }
+  .banner-stat .l { font-size: 11px; opacity: .65; letter-spacing: 0.06em; text-transform: uppercase; }
+
+  /* === Loading shimmer === */
+  .loading .value, .loading .headline { color: transparent; background: linear-gradient(90deg, var(--line) 25%, var(--line-2) 50%, var(--line) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 4px; display: inline-block; }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+  /* === Responsive === */
+  @media (max-width: 900px) {
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .ovp-grid, .grid-2, .grid-2-1, .grid-3, .detail-links { grid-template-columns: 1fr; }
+    main { padding: 16px; }
+    section.section { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark">F</div>
+    <div>
+      <div class="brand-name">Fitasy</div>
+      <div class="brand-sub">Brand Performance</div>
+    </div>
+  </div>
+  <div class="filters">
+    <span class="pill status" id="status-pill"><span class="dot"></span><span class="status-text">Loading data…</span></span>
+    <span class="pill active" data-banner="period">📅 Last 30 days</span>
+    <a class="pill" href="https://datastudio.google.com/u/1/reporting/272fecc3-e1a5-47bb-8e1a-b973be08bcd4" target="_blank">Open in Looker Studio ↗</a>
+  </div>
+</header>
+
+<main>
+
+  <!-- ===== Banner ===== -->
+  <div class="banner-strip">
+    <div class="left">
+      <div>
+        <h1>Fitasy · Brand Performance Dashboard</h1>
+        <div class="sub" data-banner="sub">Last 30 days · GA4 + Google Ads + Shopify + Klaviyo</div>
+      </div>
+    </div>
+    <div class="right">
+      <div class="banner-stat" data-banner-kpi="active_users"><div class="v">—</div><div class="l">Active users</div></div>
+      <div class="banner-stat" data-banner-kpi="purchase_revenue"><div class="v">—</div><div class="l">Revenue</div></div>
+      <div class="banner-stat" data-banner-kpi="roas"><div class="v">—</div><div class="l">Google ROAS</div></div>
+    </div>
+  </div>
+
+  <!-- ===== Section 1: Main KPIs ===== -->
+  <section class="section" id="kpis">
+    <div class="section-head">
+      <h2>Main KPIs</h2>
+      <div class="meta">Last 30 Days · GA4 + Google Ads</div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi" data-kpi="active_users"><div class="label">Active users</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
+      <div class="kpi" data-kpi="engaged_sessions"><div class="label">Engaged sessions</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
+      <div class="kpi" data-kpi="engagement_rate"><div class="label">Engagement rate</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
+      <div class="kpi" data-kpi="purchase_revenue"><div class="label">Purchase revenue</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
+
+      <div class="kpi" data-kpi="transactions"><div class="label">Transactions</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
+      <div class="kpi" data-kpi="aov"><div class="label">AOV</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
+      <div class="kpi" data-kpi="google_cost"><div class="label">Google Ads cost</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
+      <div class="kpi" data-kpi="roas"><div class="label">Google ROAS</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
+
+      <div class="kpi" data-kpi="cost_per_order"><div class="label">Cost / order</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
+      <div class="kpi" data-kpi="avg_cpc"><div class="label">Avg. CPC</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
+      <div class="kpi" data-kpi="purchase_rate"><div class="label">Purchase rate</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
+      <div class="kpi" data-kpi="brand_mentions"><div class="label">Brand mentions</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">last 30d</span></div></div>
+    </div>
+  </section>
+
+  <!-- ===== Section 2: ORGANIC vs PAID ===== -->
+  <section class="section" id="organic-paid">
+    <div class="section-head">
+      <h2>Organic vs Paid</h2>
+      <div class="meta">Last 30 Days · GA4 Session medium grouping</div>
+    </div>
+
+    <div class="ovp-grid">
+      <div class="ovp-card organic" data-ovp="organic">
+        <div class="tag">Organic</div>
+        <div class="headline" data-field="revenue">—</div>
+        <div class="sub" data-field="sub">— of total</div>
+        <div class="row"><span class="l">Sessions</span><span class="v" data-field="sessions">—</span></div>
+        <div class="row"><span class="l">Transactions</span><span class="v" data-field="transactions">—</span></div>
+        <div class="row"><span class="l">Conversion rate</span><span class="v" data-field="cvr">—</span></div>
+        <div class="row"><span class="l">Rev / session</span><span class="v" data-field="rev_per_session">—</span></div>
+      </div>
+      <div class="ovp-card paid" data-ovp="paid">
+        <div class="tag">Paid</div>
+        <div class="headline" data-field="revenue">—</div>
+        <div class="sub" data-field="sub">— of total</div>
+        <div class="row"><span class="l">Sessions</span><span class="v" data-field="sessions">—</span></div>
+        <div class="row"><span class="l">Transactions</span><span class="v" data-field="transactions">—</span></div>
+        <div class="row"><span class="l">Conversion rate</span><span class="v" data-field="cvr">—</span></div>
+        <div class="row"><span class="l">Rev / session</span><span class="v" data-field="rev_per_session">—</span></div>
+      </div>
+    </div>
+
+    <div class="ovp-chart-wrap">
+      <div class="chart-title">Sessions over time · Organic vs Paid</div>
+      <div class="chart-wrap"><canvas id="chart-ovp"></canvas></div>
+    </div>
+
+    <div style="margin-top: 20px; overflow: hidden;">
+      <table>
+        <thead><tr>
+          <th>Channel</th><th></th><th class="num">Sessions</th><th class="num">Transactions</th><th class="num">Revenue</th><th class="num">CVR</th><th class="num">Rev/session</th>
+        </tr></thead>
+        <tbody data-tbody="ovp-channels"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===== Section 3: Cost vs Revenue trend ===== -->
+  <section class="section" id="cost-revenue">
+    <div class="section-head">
+      <h2>Cost vs Revenue</h2>
+      <div class="meta">Daily · Last 30 Days</div>
+      <a class="link" href="https://ads.google.com/aw/overview" target="_blank">View in Google Ads</a>
+    </div>
+    <div class="chart-wrap tall"><canvas id="chart-cost-rev"></canvas></div>
+  </section>
+
+  <!-- ===== Section 4: Traffic Sources ===== -->
+  <section class="section" id="traffic">
+    <div class="section-head">
+      <h2>Traffic Sources</h2>
+      <div class="meta">Last 30 Days · GA4 Session source/medium</div>
+      <a class="link" href="https://analytics.google.com/" target="_blank">View in GA4</a>
+    </div>
+    <div class="grid-2-1">
+      <div>
+        <div class="chart-wrap tall"><canvas id="chart-channels"></canvas></div>
+      </div>
+      <div>
+        <table>
+          <thead><tr><th>Source / Medium</th><th class="num">Sessions</th><th class="num">%</th></tr></thead>
+          <tbody data-tbody="channels"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Section 5: Campaign Performance ===== -->
+  <section class="section" id="campaigns">
+    <div class="section-head">
+      <h2>Campaign Performance</h2>
+      <div class="meta">Last 30 Days · Google Ads</div>
+      <a class="link" href="https://ads.google.com/aw/campaigns" target="_blank">View campaigns in Google Ads</a>
+    </div>
+    <table>
+      <thead><tr>
+        <th>Campaign</th><th class="num">Cost</th><th class="num">Clicks</th><th class="num">CPC</th><th class="num">Conversions</th><th class="num">Revenue</th><th class="num">ROAS</th>
+      </tr></thead>
+      <tbody data-tbody="campaigns"></tbody>
+    </table>
+  </section>
+
+  <!-- ===== Section 6: Pillar performance ===== -->
+  <section class="section" id="pillars">
+    <div class="section-head">
+      <h2>Performance by Brand Pillar</h2>
+      <div class="meta">Last 30 Days · across paid + organic</div>
+    </div>
+    <table>
+      <thead><tr>
+        <th>Pillar</th><th class="num">Sessions</th><th class="num">Add to cart</th><th class="num">Transactions</th><th class="num">Revenue</th><th>Mix</th>
+      </tr></thead>
+      <tbody data-tbody="pillars"></tbody>
+    </table>
+  </section>
+
+  <!-- ===== Section 7: Top Products ===== -->
+  <section class="section" id="products">
+    <div class="section-head">
+      <h2>Top Products</h2>
+      <div class="meta">Last 30 Days · Shopify</div>
+      <a class="link" href="https://fitasy.myshopify.com/admin/analytics" target="_blank">View in Shopify</a>
+    </div>
+    <table>
+      <thead><tr>
+        <th>Product</th><th class="num">Units sold</th><th class="num">Revenue</th><th class="num">Add-to-cart rate</th><th class="num">PDP sessions</th>
+      </tr></thead>
+      <tbody data-tbody="products"></tbody>
+    </table>
+  </section>
+
+  <!-- ===== Section 8: Site Engagement ===== -->
+  <section class="section" id="engagement">
+    <div class="section-head">
+      <h2>Site Engagement</h2>
+      <div class="meta">Last 30 Days · GA4 page paths</div>
+      <a class="link" href="https://analytics.google.com/" target="_blank">View in GA4</a>
+    </div>
+    <table>
+      <thead><tr>
+        <th>Page</th><th class="num">Views</th><th class="num">Avg engagement</th><th class="num">Conv. value</th>
+      </tr></thead>
+      <tbody data-tbody="pages"></tbody>
+    </table>
+  </section>
+
+  <!-- ===== Section 9: Brand health (sentiment) ===== -->
+  <section class="section" id="brand-health">
+    <div class="section-head">
+      <h2>Brand Health</h2>
+      <div class="meta">Auto-pulled hourly from Google News + Reddit + HN</div>
+      <a class="link" href="https://docs.google.com/spreadsheets/d/1ZFbYEVWnZP0c1bWLMIKoN1F8ujhnADNyTHkYmDkcvpQ/edit" target="_blank">Open mentions sheet</a>
+    </div>
+    <div class="grid-2">
+      <div>
+        <div class="chart-wrap"><canvas id="chart-sentiment"></canvas></div>
+      </div>
+      <div data-container="mentions"></div>
+    </div>
+  </section>
+
+  <!-- ===== Section 10: Email (Klaviyo) ===== -->
+  <section class="section" id="email">
+    <div class="section-head">
+      <h2>Email Marketing</h2>
+      <div class="meta">Last 30 Days · Klaviyo</div>
+      <a class="link" href="https://www.klaviyo.com/" target="_blank">View in Klaviyo</a>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi" data-kpi="email_subscribers"><div class="label">Subscribers</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">net</span></div></div>
+      <div class="kpi" data-kpi="email_sent"><div class="label">Sent</div><div class="value">—</div><div class="meta"><span class="meta-text">campaigns</span></div></div>
+      <div class="kpi" data-kpi="email_open_rate"><div class="label">Open rate</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
+      <div class="kpi" data-kpi="email_revenue"><div class="label">Attributed revenue</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
+    </div>
+  </section>
+
+  <!-- ===== Section 11: Detail-view links ===== -->
+  <section class="section" id="quick-links">
+    <div class="section-head">
+      <h2>View in detail</h2>
+      <div class="meta">Drill down to the source platforms</div>
+    </div>
+    <div class="detail-links">
+      <a class="detail-link" href="https://datastudio.google.com/u/1/reporting/272fecc3-e1a5-47bb-8e1a-b973be08bcd4" target="_blank">
+        <div class="lbl">Looker Studio</div>
+        <div class="name">Live Brand Dashboard</div>
+        <div class="desc">Filterable, sharable, scheduled email digests</div>
+      </a>
+      <a class="detail-link" href="https://analytics.google.com/" target="_blank">
+        <div class="lbl">GA4</div>
+        <div class="name">Web Analytics</div>
+        <div class="desc">Users, sessions, conversion paths, audiences</div>
+      </a>
+      <a class="detail-link" href="https://ads.google.com/aw/overview" target="_blank">
+        <div class="lbl">Google Ads</div>
+        <div class="name">Campaign Manager</div>
+        <div class="desc">Search, Shopping, PMax, Demand Gen</div>
+      </a>
+      <a class="detail-link" href="https://fitasy.myshopify.com/admin" target="_blank">
+        <div class="lbl">Shopify</div>
+        <div class="name">Storefront Admin</div>
+        <div class="desc">Orders, products, customers, analytics</div>
+      </a>
+      <a class="detail-link" href="https://business.facebook.com/" target="_blank">
+        <div class="lbl">Meta</div>
+        <div class="name">Business Manager</div>
+        <div class="desc">Ads Manager + Instagram + Facebook insights</div>
+      </a>
+      <a class="detail-link" href="https://search.google.com/search-console" target="_blank">
+        <div class="lbl">Search Console</div>
+        <div class="name">Organic Search</div>
+        <div class="desc">Queries, impressions, click-through rate</div>
+      </a>
+      <a class="detail-link" href="https://www.klaviyo.com/" target="_blank">
+        <div class="lbl">Klaviyo</div>
+        <div class="name">Email & SMS</div>
+        <div class="desc">Campaigns, flows, list growth, attribution</div>
+      </a>
+      <a class="detail-link" href="https://docs.google.com/spreadsheets/d/1ZFbYEVWnZP0c1bWLMIKoN1F8ujhnADNyTHkYmDkcvpQ/edit" target="_blank">
+        <div class="lbl">Google Sheets</div>
+        <div class="name">Brand Mentions Log</div>
+        <div class="desc">Auto-updated hourly via Apps Script</div>
+      </a>
+    </div>
+  </section>
+
+  <div style="text-align: center; padding: 24px; color: var(--ink-3); font-size: 12px;" data-banner="footer">
+    Built for Fitasy internal weekly review · <a href="#" id="refresh-link" style="color: var(--ink-3);">Refresh data</a>
+  </div>
+
+</main>
+
+<!-- ====================================================================== -->
+<!-- ====================  LIVE DATA LAYER  =============================== -->
+<!-- ====================================================================== -->
+<!--
+  This script fetches data from a Google Sheet and populates the dashboard.
+
+  ## Configure:
+    1. Open your FitasyDashboard Google Sheet
+    2. Sharing → set to "Anyone with the link → Viewer"
+    3. Copy the sheet ID from the URL (between /d/ and /edit)
+    4. Paste it as SHEET_ID below
+    5. Create the tabs listed in TABS below (see 04_LIVE_DEPLOY.md for column schemas)
+
+  ## How it works:
+    - On page load, fetches each tab as CSV via the public gviz endpoint
+    - Parses with PapaParse, populates DOM elements by their data-* attributes
+    - If sheet fails to load, falls back to "—" placeholders (page still renders)
+    - Status pill at top shows live/stale/error state
+-->
+<script>
+  // ============== CONFIG ==============
+  const SHEET_ID = '1IXx602iT322QYoA7fEd4BzRrBBsCDxD9MEmeecJxnME'; // FitasyDashboard sheet (Kevin)
+  const TABS = {
+    config: 'Config',
+    kpis: 'KPIs',
+    ovpSummary: 'OvpSummary',
+    ovpChannels: 'OvpChannels',
+    channels: 'ChannelMix',
+    campaigns: 'Campaigns',
+    trend: 'Trend',
+    pillars: 'Pillars',
+    products: 'Products',
+    pages: 'TopPages',
+    sentiment: 'Sentiment',
+    mentions: 'Mentions',
+    email: 'Email'
+  };
+
+  // ============== CHART DEFAULTS ==============
+  Chart.defaults.font.family = "'Inter', sans-serif";
+  Chart.defaults.font.size = 11;
+  Chart.defaults.color = '#5f7c8e';
+  Chart.defaults.borderColor = '#ece9d8';
+
+  // Hold chart refs so we can update them after fetch
+  const charts = {};
+
+  // ============== FETCH HELPERS ==============
+  async function fetchTab(tabName) {
+    if (!SHEET_ID || SHEET_ID === 'PASTE_YOUR_SHEET_ID_HERE') return null;
+    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}`;
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const text = await resp.text();
+      const parsed = Papa.parse(text, { header: true, skipEmptyLines: true, dynamicTyping: true });
+      return parsed.data;
+    } catch (e) {
+      console.warn(`Failed to fetch tab "${tabName}":`, e);
+      return null;
+    }
+  }
+
+  function setStatus(state, text) {
+    const pill = document.getElementById('status-pill');
+    pill.classList.remove('live', 'stale', 'error');
+    pill.classList.add(state);
+    pill.querySelector('.status-text').textContent = text;
+  }
+
+  function fmt(value, opts = {}) {
+    if (value === null || value === undefined || value === '' || isNaN(value)) return '—';
+    const n = Number(value);
+    if (opts.currency) return '$' + n.toLocaleString('en-US', { maximumFractionDigits: opts.decimals ?? 0 });
+    if (opts.percent) return n.toFixed(opts.decimals ?? 1) + '%';
+    if (opts.x) return n.toFixed(opts.decimals ?? 2) + '×';
+    return n.toLocaleString('en-US', { maximumFractionDigits: opts.decimals ?? 0 });
+  }
+
+  // ============== POPULATE: KPIs ==============
+  function populateKPIs(rows) {
+    if (!rows) return;
+    rows.forEach(row => {
+      const id = row.id;
+      const card = document.querySelector(`[data-kpi="${id}"]`);
+      if (!card) return;
+      const valEl = card.querySelector('.value');
+      const lblEl = card.querySelector('.label');
+      const deltaEl = card.querySelector('.delta');
+      const metaEl = card.querySelector('.meta-text');
+
+      if (row.value !== undefined && row.value !== '') {
+        valEl.textContent = (row.prefix || '') + row.value + (row.suffix || '');
+      }
+      if (row.label) lblEl.textContent = row.label;
+      if (deltaEl && row.delta !== undefined && row.delta !== '') {
+        const dir = (row.delta_direction || 'flat').toLowerCase();
+        const sign = dir === 'up' ? '+' : dir === 'down' ? '−' : '';
+        deltaEl.textContent = sign + row.delta;
+        deltaEl.className = 'delta ' + dir;
+      }
+      if (metaEl && row.meta) metaEl.textContent = row.meta;
+
+      // Mirror to banner stat if present
+      const bannerStat = document.querySelector(`[data-banner-kpi="${id}"] .v`);
+      if (bannerStat && row.value !== undefined && row.value !== '') {
+        bannerStat.textContent = (row.prefix || '') + row.value + (row.suffix || '');
+      }
+    });
+  }
+
+  // ============== POPULATE: Organic vs Paid summary ==============
+  function populateOvpSummary(rows) {
+    if (!rows) return;
+    rows.forEach(row => {
+      const card = document.querySelector(`[data-ovp="${(row.class || '').toLowerCase()}"]`);
+      if (!card) return;
+      card.querySelector('[data-field="revenue"]').textContent = fmt(row.revenue, { currency: true });
+      card.querySelector('[data-field="sub"]').textContent = row.sub || `${fmt(row.percentage, { percent: true })} of total`;
+      card.querySelector('[data-field="sessions"]').textContent = fmt(row.sessions);
+      card.querySelector('[data-field="transactions"]').textContent = fmt(row.transactions);
+      card.querySelector('[data-field="cvr"]').textContent = fmt(row.cvr, { percent: true, decimals: 2 });
+      card.querySelector('[data-field="rev_per_session"]').textContent = fmt(row.rev_per_session, { currency: true, decimals: 2 });
+    });
+  }
+
+  // ============== POPULATE: tables ==============
+  function populateOvpChannels(rows) {
+    const tbody = document.querySelector('[data-tbody="ovp-channels"]');
+    if (!tbody || !rows) return;
+    tbody.innerHTML = rows.map(r => `
+      <tr>
+        <td>${escapeHtml(r.channel || '')}</td>
+        <td><span class="pill-mini ${(r.class || '').toLowerCase()}">${escapeHtml(r.class || '')}</span></td>
+        <td class="num">${fmt(r.sessions)}</td>
+        <td class="num">${fmt(r.transactions)}</td>
+        <td class="num">${fmt(r.revenue, { currency: true })}</td>
+        <td class="num">${fmt(r.cvr, { percent: true, decimals: 2 })}</td>
+        <td class="num">${fmt(r.rev_per_session, { currency: true, decimals: 2 })}</td>
+      </tr>
+    `).join('');
+  }
+
+  function populateChannelsTable(rows) {
+    const tbody = document.querySelector('[data-tbody="channels"]');
+    if (!tbody || !rows) return;
+    tbody.innerHTML = rows.map(r => `
+      <tr>
+        <td>${escapeHtml(r.source_medium || '')}</td>
+        <td class="num">${fmt(r.sessions)}</td>
+        <td class="num">${fmt(r.percentage, { percent: true, decimals: 1 })}</td>
+      </tr>
+    `).join('');
+  }
+
+  function populateCampaigns(rows) {
+    const tbody = document.querySelector('[data-tbody="campaigns"]');
+    if (!tbody || !rows) return;
+    tbody.innerHTML = rows.map(r => `
+      <tr>
+        <td>${escapeHtml(r.campaign || '')}</td>
+        <td class="num">${fmt(r.cost, { currency: true, decimals: 2 })}</td>
+        <td class="num">${fmt(r.clicks)}</td>
+        <td class="num">${fmt(r.cpc, { currency: true, decimals: 2 })}</td>
+        <td class="num">${fmt(r.conversions)}</td>
+        <td class="num">${fmt(r.revenue, { currency: true, decimals: 2 })}</td>
+        <td class="num">${fmt(r.roas, { decimals: 2 })}</td>
+      </tr>
+    `).join('');
+  }
+
+  function populatePillars(rows) {
+    const tbody = document.querySelector('[data-tbody="pillars"]');
+    if (!tbody || !rows) return;
+    const max = Math.max(...rows.map(r => Number(r.sessions || 0)));
+    tbody.innerHTML = rows.map(r => {
+      const pct = max > 0 ? (Number(r.sessions || 0) / max) * 100 : 0;
+      return `
+        <tr>
+          <td><strong>${escapeHtml(r.pillar || '')}</strong></td>
+          <td class="num">${fmt(r.sessions)}</td>
+          <td class="num">${fmt(r.atc)}</td>
+          <td class="num">${fmt(r.transactions)}</td>
+          <td class="num">${fmt(r.revenue, { currency: true })}</td>
+          <td><span class="bar" style="width: ${pct.toFixed(0)}%;"></span></td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  function populateProducts(rows) {
+    const tbody = document.querySelector('[data-tbody="products"]');
+    if (!tbody || !rows) return;
+    tbody.innerHTML = rows.map(r => `
+      <tr>
+        <td>${escapeHtml(r.product || '')}</td>
+        <td class="num">${fmt(r.units)}</td>
+        <td class="num">${fmt(r.revenue, { currency: true })}</td>
+        <td class="num">${fmt(r.atc_rate, { percent: true, decimals: 1 })}</td>
+        <td class="num">${fmt(r.pdp_sessions)}</td>
+      </tr>
+    `).join('');
+  }
+
+  function populatePages(rows) {
+    const tbody = document.querySelector('[data-tbody="pages"]');
+    if (!tbody || !rows) return;
+    tbody.innerHTML = rows.map(r => `
+      <tr>
+        <td>${escapeHtml(r.path || '')}</td>
+        <td class="num">${fmt(r.views)}</td>
+        <td class="num">${escapeHtml(r.avg_engagement || '')}</td>
+        <td class="num">${fmt(r.conv_value, { currency: true })}</td>
+      </tr>
+    `).join('');
+  }
+
+  function populateMentions(rows) {
+    const container = document.querySelector('[data-container="mentions"]');
+    if (!container || !rows) return;
+    container.innerHTML = rows.slice(0, 6).map(r => `
+      <a class="sentiment-card" href="${escapeHtml(r.url || '#')}" target="_blank">
+        <div class="sentiment-dot ${(r.sentiment || 'neutral').toLowerCase()}"></div>
+        <div class="sentiment-meta">
+          <div class="sentiment-source">${escapeHtml(r.source || '')}</div>
+          <div class="sentiment-title">${escapeHtml(r.title || '')}</div>
+          <div class="sentiment-date">${escapeHtml(r.days_ago || '')} · ${escapeHtml(r.sentiment || '')}</div>
+        </div>
+      </a>
+    `).join('');
+  }
+
+  // ============== POPULATE: charts ==============
+  function initOvpChart(trendRows) {
+    const ctx = document.getElementById('chart-ovp');
+    const labels = trendRows ? trendRows.map(r => r.date) : [];
+    const organic = trendRows ? trendRows.map(r => Number(r.organic_sessions) || 0) : [];
+    const paid = trendRows ? trendRows.map(r => Number(r.paid_sessions) || 0) : [];
+    charts.ovp = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels.length ? labels : ['—'],
+        datasets: [
+          { label: 'Organic sessions', data: organic.length ? organic : [0], borderColor: '#b0a778', backgroundColor: 'rgba(176,167,120,0.18)', fill: true, tension: 0.35, borderWidth: 2, pointRadius: 0 },
+          { label: 'Paid sessions', data: paid.length ? paid : [0], borderColor: '#3c4a51', backgroundColor: 'rgba(60,74,81,0.12)', fill: true, tension: 0.35, borderWidth: 2, pointRadius: 0 }
+        ]
+      },
+      options: {
+        maintainAspectRatio: false, responsive: true,
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10 } } },
+        scales: { x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 10 } }, y: { grid: { color: '#ece9d8' }, beginAtZero: true } },
+        interaction: { mode: 'index', intersect: false }
+      }
+    });
+  }
+
+  function initCostRevChart(trendRows) {
+    const ctx = document.getElementById('chart-cost-rev');
+    const labels = trendRows ? trendRows.map(r => r.date) : [];
+    const cost = trendRows ? trendRows.map(r => Number(r.cost) || 0) : [];
+    const revenue = trendRows ? trendRows.map(r => Number(r.revenue) || 0) : [];
+    charts.costRev = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels.length ? labels : ['—'],
+        datasets: [
+          { label: 'Cost', data: cost.length ? cost : [0], borderColor: '#3c4a51', backgroundColor: 'rgba(60,74,81,0.18)', yAxisID: 'y', fill: true, tension: 0.35, borderWidth: 2, pointRadius: 0 },
+          { label: 'Revenue', data: revenue.length ? revenue : [0], borderColor: '#b0a778', backgroundColor: 'rgba(176,167,120,0.0)', yAxisID: 'y1', borderWidth: 2, pointRadius: 3, tension: 0.2 }
+        ]
+      },
+      options: {
+        maintainAspectRatio: false, responsive: true,
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10 } } },
+        scales: {
+          x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 10 } },
+          y: { type: 'linear', position: 'left', grid: { color: '#ece9d8' }, ticks: { callback: v => '$' + v } },
+          y1: { type: 'linear', position: 'right', grid: { display: false }, ticks: { callback: v => '$' + v } }
+        },
+        interaction: { mode: 'index', intersect: false }
+      }
+    });
+  }
+
+  function initChannelsChart(channelRows) {
+    const ctx = document.getElementById('chart-channels');
+    const labels = channelRows ? channelRows.map(r => r.source_medium) : [];
+    const data = channelRows ? channelRows.map(r => Number(r.percentage) || 0) : [];
+    charts.channels = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: labels.length ? labels : ['—'],
+        datasets: [{
+          data: data.length ? data : [100],
+          backgroundColor: ['#3c4a51','#5f7c8e','#b0a778','#91a5a6','#807e71','#d5d0a3','#8d8460','#a35a4f','#2a3438','#6b7c8e'],
+          borderWidth: 2, borderColor: '#FFFFF6'
+        }]
+      },
+      options: {
+        maintainAspectRatio: false, cutout: '60%',
+        plugins: { legend: { position: 'right', labels: { boxWidth: 10, boxHeight: 10, padding: 12 } } }
+      }
+    });
+  }
+
+  function initSentimentChart(rows) {
+    const ctx = document.getElementById('chart-sentiment');
+    const labels = rows ? rows.map(r => r.week) : [];
+    const positive = rows ? rows.map(r => Number(r.positive) || 0) : [];
+    const neutral = rows ? rows.map(r => Number(r.neutral) || 0) : [];
+    const negative = rows ? rows.map(r => Number(r.negative) || 0) : [];
+    charts.sentiment = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: labels.length ? labels : ['—'],
+        datasets: [
+          { label: 'Positive', data: positive.length ? positive : [0], backgroundColor: '#b0a778', borderRadius: 4 },
+          { label: 'Neutral', data: neutral.length ? neutral : [0], backgroundColor: '#91a5a6', borderRadius: 4 },
+          { label: 'Negative', data: negative.length ? negative : [0], backgroundColor: '#a35a4f', borderRadius: 4 }
+        ]
+      },
+      options: {
+        maintainAspectRatio: false, responsive: true,
+        scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, grid: { color: '#ece9d8' }, beginAtZero: true } },
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10 } } }
+      }
+    });
+  }
+
+  // ============== HELPERS ==============
+  function escapeHtml(str) {
+    return String(str ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  function applyConfig(rows) {
+    if (!rows) return;
+    const map = {};
+    rows.forEach(r => { if (r.key) map[r.key] = r.value; });
+    if (map.synced) {
+      document.querySelector('[data-banner="sub"]').textContent = `Last 30 days · synced ${map.synced} · GA4 + Google Ads + Shopify + Klaviyo`;
+    }
+    if (map.period) {
+      document.querySelector('[data-banner="period"]').textContent = `📅 ${map.period}`;
+    }
+  }
+
+  // ============== MAIN ==============
+  async function init() {
+    setStatus('stale', 'Fetching live data…');
+
+    const [config, kpis, ovpSummary, ovpChannels, channels, campaigns, trend, pillars, products, pages, sentiment, mentions, email] = await Promise.all([
+      fetchTab(TABS.config),
+      fetchTab(TABS.kpis),
+      fetchTab(TABS.ovpSummary),
+      fetchTab(TABS.ovpChannels),
+      fetchTab(TABS.channels),
+      fetchTab(TABS.campaigns),
+      fetchTab(TABS.trend),
+      fetchTab(TABS.pillars),
+      fetchTab(TABS.products),
+      fetchTab(TABS.pages),
+      fetchTab(TABS.sentiment),
+      fetchTab(TABS.mentions),
+      fetchTab(TABS.email)
+    ]);
+
+    applyConfig(config);
+    populateKPIs([...(kpis || []), ...(email || [])]);
+    populateOvpSummary(ovpSummary);
+    populateOvpChannels(ovpChannels);
+    populateChannelsTable(channels);
+    populateCampaigns(campaigns);
+    populatePillars(pillars);
+    populateProducts(products);
+    populatePages(pages);
+    populateMentions(mentions);
+
+    initOvpChart(trend);
+    initCostRevChart(trend);
+    initChannelsChart(channels);
+    initSentimentChart(sentiment);
+
+    // Status indicator
+    const fetched = [kpis, ovpSummary, channels, trend].filter(Boolean).length;
+    if (SHEET_ID === 'PASTE_YOUR_SHEET_ID_HERE') {
+      setStatus('stale', 'Demo data — sheet ID not configured');
+    } else if (fetched === 0) {
+      setStatus('error', 'Could not reach sheet');
+    } else if (fetched < 4) {
+      setStatus('stale', `${fetched}/4 core tabs loaded`);
+    } else {
+      setStatus('live', 'Live · last fetched just now');
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', init);
+  document.getElementById('refresh-link').addEventListener('click', e => { e.preventDefault(); init(); });
+</script>
+</body>
+</html>
