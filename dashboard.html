@@ -163,6 +163,27 @@
   .kpi .delta.up { background: rgba(90,125,90,.12); color: var(--good); }
   .kpi .delta.down { background: rgba(163,90,79,.12); color: var(--bad); }
   .kpi .delta.flat { background: rgba(128,126,113,.12); color: var(--neutral); }
+  /* Platform source tag on each KPI card */
+  .kpi .source-tag {
+    position: absolute; top: 12px; right: 12px;
+    font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 2px 7px; border-radius: 999px; font-weight: 500;
+  }
+  .kpi .source-tag.ga4     { background: rgba(95,124,142,.14); color: var(--ink-3); }
+  .kpi .source-tag.google  { background: rgba(60,74,81,.14);   color: var(--paid); }
+  .kpi .source-tag.meta    { background: rgba(95,79,142,.14);  color: #5f4f8e; }
+  .kpi .source-tag.organic { background: rgba(176,167,120,.20); color: var(--organic-deep); }
+  .kpi .source-tag.shopify { background: rgba(90,125,90,.14);  color: #4a6b4a; }
+  .kpi .source-tag.klaviyo { background: rgba(163,90,79,.12);  color: var(--bad); }
+  .kpi .source-tag.brand   { background: rgba(176,167,120,.14); color: var(--highlight); }
+  /* Group banner above each KPI sub-row */
+  .kpi-group-label {
+    grid-column: 1 / -1;
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--ink-3); padding: 8px 0 4px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .kpi-group-label::after { content: ''; flex: 1; height: 1px; background: var(--line); }
 
   /* === Organic vs Paid: split layout === */
   .ovp-grid {
@@ -268,6 +289,55 @@
   .sentiment-source { font-size: 11px; color: var(--ink-3); letter-spacing: 0.04em; text-transform: uppercase; }
   .sentiment-title { font-size: 13px; color: var(--ink); margin: 2px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .sentiment-date { font-size: 11px; color: var(--muted); }
+
+  /* === Demographics === */
+  .demo-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 24px; }
+  .demo-bar-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; font-size: 13px; }
+  .demo-bar-row .lbl { width: 80px; color: var(--ink-2); }
+  .demo-bar-row .track { flex: 1; height: 8px; background: var(--line); border-radius: 999px; overflow: hidden; }
+  .demo-bar-row .fill { height: 100%; background: var(--organic); border-radius: 999px; }
+  .demo-bar-row .num { font-variant-numeric: tabular-nums; color: var(--ink-3); font-size: 12px; min-width: 50px; text-align: right; }
+  .demo-gender { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .demo-gender-card { padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); text-align: center; }
+  .demo-gender-card .pct { font-family: 'Playfair Display', serif; font-size: 32px; font-weight: 500; }
+  .demo-gender-card .name { font-size: 11px; color: var(--ink-3); letter-spacing: 0.08em; text-transform: uppercase; margin-top: 4px; }
+  .demo-gender-card .users { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  /* === Creatives === */
+  .creatives-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 16px;
+  }
+  .creative-card {
+    border: 1px solid var(--line); border-radius: 12px;
+    overflow: hidden; background: var(--bg);
+    transition: all .15s;
+  }
+  .creative-card:hover { transform: translateY(-2px); border-color: var(--ink-3); }
+  .creative-thumb {
+    width: 100%; aspect-ratio: 1 / 1;
+    background: linear-gradient(135deg, var(--line), var(--line-2));
+    display: grid; place-items: center;
+    color: var(--ink-3); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+  }
+  .creative-meta { padding: 12px 14px; }
+  .creative-meta .platform { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; display: inline-block; }
+  .creative-meta .platform.meta   { background: rgba(95,79,142,.14); color: #5f4f8e; }
+  .creative-meta .platform.google { background: rgba(60,74,81,.14); color: var(--paid); }
+  .creative-meta .platform.tiktok { background: rgba(0,0,0,.08); color: var(--ink); }
+  .creative-meta .platform.organic { background: rgba(176,167,120,.20); color: var(--organic-deep); }
+  .creative-meta .name { font-size: 13px; margin-top: 8px; line-height: 1.3; }
+  .creative-meta .stats { display: flex; gap: 12px; margin-top: 8px; font-size: 11px; color: var(--ink-3); }
+  .creative-empty {
+    grid-column: 1 / -1;
+    padding: 40px 24px;
+    text-align: center;
+    color: var(--ink-3);
+    font-size: 13px;
+    border: 1px dashed var(--line);
+    border-radius: 12px;
+    background: var(--bg);
+  }
 
   /* === Detail links footer === */
   .detail-links {
@@ -376,20 +446,29 @@
       <div class="meta">Last 30 Days · GA4 + Google Ads</div>
     </div>
     <div class="kpi-grid">
-      <div class="kpi" data-kpi="active_users"><div class="label">Active users</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
-      <div class="kpi" data-kpi="engaged_sessions"><div class="label">Engaged sessions</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
-      <div class="kpi" data-kpi="engagement_rate"><div class="label">Engagement rate</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
-      <div class="kpi" data-kpi="purchase_revenue"><div class="label">Purchase revenue</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
+      <div class="kpi-group-label">Overall site activity · GA4</div>
+      <div class="kpi" data-kpi="active_users"><span class="source-tag ga4">GA4</span><div class="label">Active users</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
+      <div class="kpi" data-kpi="engaged_sessions"><span class="source-tag ga4">GA4</span><div class="label">Engaged sessions</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
+      <div class="kpi" data-kpi="engagement_rate"><span class="source-tag ga4">GA4</span><div class="label">Engagement rate</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
+      <div class="kpi" data-kpi="purchase_revenue"><span class="source-tag ga4">GA4</span><div class="label">Purchase revenue</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
 
-      <div class="kpi" data-kpi="transactions"><div class="label">Transactions</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
-      <div class="kpi" data-kpi="aov"><div class="label">AOV</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
-      <div class="kpi" data-kpi="google_cost"><div class="label">Google Ads cost</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
-      <div class="kpi" data-kpi="roas"><div class="label">Google ROAS</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
+      <div class="kpi-group-label">Commerce · GA4 + Shopify</div>
+      <div class="kpi" data-kpi="transactions"><span class="source-tag ga4">GA4</span><div class="label">Transactions</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
+      <div class="kpi" data-kpi="aov"><span class="source-tag ga4">GA4</span><div class="label">AOV</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
+      <div class="kpi" data-kpi="purchase_rate"><span class="source-tag ga4">GA4</span><div class="label">Purchase rate</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
+      <div class="kpi" data-kpi="brand_mentions"><span class="source-tag brand">Brand</span><div class="label">Brand mentions</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">last 30d</span></div></div>
 
-      <div class="kpi" data-kpi="cost_per_order"><div class="label">Cost / order</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
-      <div class="kpi" data-kpi="avg_cpc"><div class="label">Avg. CPC</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
-      <div class="kpi" data-kpi="purchase_rate"><div class="label">Purchase rate</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
-      <div class="kpi" data-kpi="brand_mentions"><div class="label">Brand mentions</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">last 30d</span></div></div>
+      <div class="kpi-group-label">Paid Google Ads</div>
+      <div class="kpi" data-kpi="google_cost"><span class="source-tag google">Google</span><div class="label">Cost</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
+      <div class="kpi" data-kpi="roas"><span class="source-tag google">Google</span><div class="label">ROAS</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
+      <div class="kpi" data-kpi="cost_per_order"><span class="source-tag google">Google</span><div class="label">Cost / order</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
+      <div class="kpi" data-kpi="avg_cpc"><span class="source-tag google">Google</span><div class="label">Avg. CPC</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
+
+      <div class="kpi-group-label">Paid Meta · awaiting Business Manager access from Protean</div>
+      <div class="kpi" data-kpi="meta_spend"><span class="source-tag meta">Meta</span><div class="label">Spend</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
+      <div class="kpi" data-kpi="meta_roas"><span class="source-tag meta">Meta</span><div class="label">ROAS</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
+      <div class="kpi" data-kpi="meta_purchases"><span class="source-tag meta">Meta</span><div class="label">Purchases</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
+      <div class="kpi" data-kpi="meta_ctr"><span class="source-tag meta">Meta</span><div class="label">CTR</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
     </div>
   </section>
 
@@ -525,6 +604,39 @@
     </table>
   </section>
 
+  <!-- ===== Section 8b: Audience Demographics ===== -->
+  <section class="section" id="demographics">
+    <div class="section-head">
+      <h2>Audience Demographics</h2>
+      <div class="meta">Last 30 Days · GA4 user demographics</div>
+      <a class="link" href="https://analytics.google.com/" target="_blank">View in GA4</a>
+    </div>
+    <div class="demo-grid">
+      <div>
+        <div style="font-size: 11px; color: var(--ink-3); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 12px;">Age</div>
+        <div data-container="demo-age"></div>
+      </div>
+      <div>
+        <div style="font-size: 11px; color: var(--ink-3); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 12px;">Gender</div>
+        <div class="demo-gender" data-container="demo-gender"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Section 8c: Active Creatives ===== -->
+  <section class="section" id="creatives">
+    <div class="section-head">
+      <h2>Active Creatives</h2>
+      <div class="meta">Ads currently in flight, by platform</div>
+      <a class="link" href="https://business.facebook.com/" target="_blank">View in Meta Ads Manager</a>
+    </div>
+    <div class="creatives-grid" data-container="creatives">
+      <div class="creative-empty">
+        Creative thumbnails will appear here once the Meta Ads + Google Ads asset APIs are connected. Each card will show: platform, ad name, spend, impressions, CTR, and a thumbnail of the actual creative.
+      </div>
+    </div>
+  </section>
+
   <!-- ===== Section 9: Brand health (sentiment) ===== -->
   <section class="section" id="brand-health">
     <div class="section-head">
@@ -644,7 +756,10 @@
       ovpChannels: `OvpChannels_${p}d`,
       channels:    `ChannelMix_${p}d`,
       trend:       `Trend_${p}d`,
-      pages:       `TopPages_${p}d`
+      pages:       `TopPages_${p}d`,
+      demoAge:     `DemoAge_${p}d`,
+      demoGender:  `DemoGender_${p}d`,
+      metaKpis:    `MetaKpis_${p}d`
     };
   }
   const STATIC_TABS = {
@@ -654,7 +769,8 @@
     products:  'Products',
     sentiment: 'Sentiment',
     mentions:  'Mentions',
-    email:     'Email'
+    email:     'Email',
+    creatives: 'Creatives'
   };
 
   // ============== CHART DEFAULTS ==============
@@ -698,6 +814,9 @@
     return n.toLocaleString('en-US', { maximumFractionDigits: opts.decimals ?? 0 });
   }
 
+  // Treat null/undefined/empty-string as "blank" — empty cells from PapaParse come back as null
+  function isBlank(v) { return v === null || v === undefined || v === '' || v === 'null'; }
+
   // ============== POPULATE: KPIs ==============
   function populateKPIs(rows) {
     if (!rows) return;
@@ -710,21 +829,28 @@
       const deltaEl = card.querySelector('.delta');
       const metaEl = card.querySelector('.meta-text');
 
-      if (row.value !== undefined && row.value !== '') {
+      if (!isBlank(row.value)) {
         valEl.textContent = (row.prefix || '') + row.value + (row.suffix || '');
+      } else {
+        valEl.textContent = '—';
       }
-      if (row.label) lblEl.textContent = row.label;
-      if (deltaEl && row.delta !== undefined && row.delta !== '') {
-        const dir = (row.delta_direction || 'flat').toLowerCase();
-        const sign = dir === 'up' ? '+' : dir === 'down' ? '−' : '';
-        deltaEl.textContent = sign + row.delta;
-        deltaEl.className = 'delta ' + dir;
+      if (!isBlank(row.label)) lblEl.textContent = row.label;
+      if (deltaEl) {
+        if (!isBlank(row.delta)) {
+          const dir = isBlank(row.delta_direction) ? 'flat' : String(row.delta_direction).toLowerCase();
+          const sign = dir === 'up' ? '+' : dir === 'down' ? '−' : '';
+          deltaEl.textContent = sign + row.delta;
+          deltaEl.className = 'delta ' + dir;
+        } else {
+          deltaEl.textContent = '—';
+          deltaEl.className = 'delta flat';
+        }
       }
-      if (metaEl && row.meta) metaEl.textContent = row.meta;
+      if (metaEl && !isBlank(row.meta)) metaEl.textContent = row.meta;
 
       // Mirror to banner stat if present
       const bannerStat = document.querySelector(`[data-banner-kpi="${id}"] .v`);
-      if (bannerStat && row.value !== undefined && row.value !== '') {
+      if (bannerStat && !isBlank(row.value)) {
         bannerStat.textContent = (row.prefix || '') + row.value + (row.suffix || '');
       }
     });
@@ -833,6 +959,58 @@
         <td class="num">${escapeHtml(r.avg_engagement || '')}</td>
         <td class="num">${fmt(r.conv_value, { currency: true })}</td>
       </tr>
+    `).join('');
+  }
+
+  function populateDemoAge(rows) {
+    const container = document.querySelector('[data-container="demo-age"]');
+    if (!container) return;
+    if (!rows || rows.length === 0) { container.innerHTML = '<div style="color: var(--muted); font-size: 12px;">—</div>'; return; }
+    const max = Math.max(...rows.map(r => Number(r.users || 0)));
+    container.innerHTML = rows.map(r => {
+      const u = Number(r.users || 0);
+      const pct = max > 0 ? (u / max * 100).toFixed(0) : 0;
+      return `<div class="demo-bar-row">
+        <div class="lbl">${escapeHtml(r.bracket || '—')}</div>
+        <div class="track"><div class="fill" style="width: ${pct}%;"></div></div>
+        <div class="num">${fmt(u)}</div>
+      </div>`;
+    }).join('');
+  }
+
+  function populateDemoGender(rows) {
+    const container = document.querySelector('[data-container="demo-gender"]');
+    if (!container) return;
+    if (!rows || rows.length === 0) { container.innerHTML = '<div style="color: var(--muted); font-size: 12px; grid-column: 1 / -1;">—</div>'; return; }
+    const total = rows.reduce((s, r) => s + Number(r.users || 0), 0);
+    container.innerHTML = rows.slice(0, 2).map(r => {
+      const u = Number(r.users || 0);
+      const pct = total > 0 ? (u / total * 100).toFixed(0) : 0;
+      return `<div class="demo-gender-card">
+        <div class="pct">${pct}%</div>
+        <div class="name">${escapeHtml(r.gender || '—')}</div>
+        <div class="users">${fmt(u)} users</div>
+      </div>`;
+    }).join('');
+  }
+
+  function populateCreatives(rows) {
+    const container = document.querySelector('[data-container="creatives"]');
+    if (!container) return;
+    if (!rows || rows.length === 0) return; // keep empty-state placeholder
+    container.innerHTML = rows.map(r => `
+      <div class="creative-card">
+        <div class="creative-thumb">${r.thumb_url ? `<img src="${escapeHtml(r.thumb_url)}" alt="" style="width:100%;height:100%;object-fit:cover;">` : '(no thumbnail)'}</div>
+        <div class="creative-meta">
+          <span class="platform ${(r.platform || '').toLowerCase()}">${escapeHtml(r.platform || '—')}</span>
+          <div class="name">${escapeHtml(r.name || '—')}</div>
+          <div class="stats">
+            <span>${fmt(r.spend, { currency: true })} spend</span>
+            <span>${fmt(r.impressions)} impr</span>
+            <span>${fmt(r.ctr, { percent: true, decimals: 2 })} CTR</span>
+          </div>
+        </div>
+      </div>
     `).join('');
   }
 
@@ -981,7 +1159,7 @@
     setStatus('stale', `Fetching ${CURRENT_PERIOD}-day data…`);
     const T = PERIODED_TABS();
 
-    const [config, kpis, ovpSummary, ovpChannels, channels, campaigns, trend, pillars, products, pages, sentiment, mentions, email] = await Promise.all([
+    const [config, kpis, ovpSummary, ovpChannels, channels, campaigns, trend, pillars, products, pages, sentiment, mentions, email, demoAge, demoGender, metaKpis, creatives] = await Promise.all([
       fetchTab(STATIC_TABS.config),
       fetchTab(T.kpis),
       fetchTab(T.ovpSummary),
@@ -994,12 +1172,16 @@
       fetchTab(T.pages),
       fetchTab(STATIC_TABS.sentiment),
       fetchTab(STATIC_TABS.mentions),
-      fetchTab(STATIC_TABS.email)
+      fetchTab(STATIC_TABS.email),
+      fetchTab(T.demoAge),
+      fetchTab(T.demoGender),
+      fetchTab(T.metaKpis),
+      fetchTab(STATIC_TABS.creatives)
     ]);
 
     updatePeriodLabels();
     applyConfig(config);
-    populateKPIs([...(kpis || []), ...(email || [])]);
+    populateKPIs([...(kpis || []), ...(email || []), ...(metaKpis || [])]);
     populateOvpSummary(ovpSummary);
     populateOvpChannels(ovpChannels);
     populateChannelsTable(channels);
@@ -1007,6 +1189,9 @@
     populatePillars(pillars);
     populateProducts(products);
     populatePages(pages);
+    populateDemoAge(demoAge);
+    populateDemoGender(demoGender);
+    populateCreatives(creatives);
     populateMentions(mentions);
 
     destroyCharts();

@@ -46,18 +46,23 @@ function pullAll() {
   // GA4-derived tabs are duplicated per period (7d, 30d, 90d) so the dashboard can switch instantly
   PERIODS.forEach(days => {
     console.log(`--- Period: ${days} days ---`);
-    try { pullGA4Kpis(days); }        catch (e) { console.error(`pullGA4Kpis(${days}):`, e); }
-    try { pullGA4OvpSummary(days); }  catch (e) { console.error(`pullGA4OvpSummary(${days}):`, e); }
-    try { pullGA4OvpChannels(days); } catch (e) { console.error(`pullGA4OvpChannels(${days}):`, e); }
-    try { pullGA4ChannelMix(days); }  catch (e) { console.error(`pullGA4ChannelMix(${days}):`, e); }
-    try { pullGA4Trend(days); }       catch (e) { console.error(`pullGA4Trend(${days}):`, e); }
-    try { pullGA4TopPages(days); }    catch (e) { console.error(`pullGA4TopPages(${days}):`, e); }
+    try { pullGA4Kpis(days); }         catch (e) { console.error(`pullGA4Kpis(${days}):`, e); }
+    try { pullGA4OvpSummary(days); }   catch (e) { console.error(`pullGA4OvpSummary(${days}):`, e); }
+    try { pullGA4OvpChannels(days); }  catch (e) { console.error(`pullGA4OvpChannels(${days}):`, e); }
+    try { pullGA4ChannelMix(days); }   catch (e) { console.error(`pullGA4ChannelMix(${days}):`, e); }
+    try { pullGA4Trend(days); }        catch (e) { console.error(`pullGA4Trend(${days}):`, e); }
+    try { pullGA4TopPages(days); }     catch (e) { console.error(`pullGA4TopPages(${days}):`, e); }
+    try { pullGA4DemoAge(days); }      catch (e) { console.error(`pullGA4DemoAge(${days}):`, e); }
+    try { pullGA4DemoGender(days); }   catch (e) { console.error(`pullGA4DemoGender(${days}):`, e); }
+    try { pullMeta(days); }            catch (e) { console.error(`pullMeta(${days}):`, e); }
   });
 
   // Period-agnostic data sources
   try { pullGoogleAdsCampaigns(); } catch (e) { console.error('pullGoogleAdsCampaigns:', e); }
   try { pullSentiment(); }          catch (e) { console.error('pullSentiment:', e); }
   try { pullMentions(); }           catch (e) { console.error('pullMentions:', e); }
+  try { pullKlaviyo(); }            catch (e) { console.error('pullKlaviyo:', e); }
+  try { pullCreatives(); }          catch (e) { console.error('pullCreatives:', e); }
 
   console.log(`=== Done in ${(Date.now() - t0) / 1000}s ===`);
 }
@@ -82,14 +87,32 @@ function writeConfig() {
 // ============================ GA4: KPIs (one row per metric) ============================
 
 function pullGA4Kpis(days) {
+  // Include `date` dimension so per-row metrics exist for the totals-fallback sum
   const cur = ga4RunReport({
+    dimensions: ['date'],
     metrics: ['activeUsers', 'engagedSessions', 'engagementRate', 'purchaseRevenue', 'ecommercePurchases', 'averagePurchaseRevenue'],
     daysBack: days
   });
   const prev = ga4RunReport({
+    dimensions: ['date'],
     metrics: ['activeUsers', 'engagedSessions', 'engagementRate', 'purchaseRevenue', 'ecommercePurchases', 'averagePurchaseRevenue'],
     daysBack: days, daysOffset: days
   });
+
+  // Engagement rate and AOV need recomputation since summing rows doesn't average correctly
+  // engagementRate = engagedSessions / sessions; we'll approximate as average of per-day rates weighted by users
+  // For simplicity (and consistency with Protean), recompute AOV from totals: revenue / purchases
+  if (cur.totals.ecommercePurchases > 0) {
+    cur.totals.averagePurchaseRevenue = cur.totals.purchaseRevenue / cur.totals.ecommercePurchases;
+  }
+  if (prev.totals.ecommercePurchases > 0) {
+    prev.totals.averagePurchaseRevenue = prev.totals.purchaseRevenue / prev.totals.ecommercePurchases;
+  }
+  // engagementRate: sum gives total engagement-seconds-per-day kind of overstate; use average across days
+  const validRates = cur.rows.map(r => Number(r.metrics[2])).filter(v => isFinite(v) && v > 0);
+  if (validRates.length > 0) cur.totals.engagementRate = validRates.reduce((a,b) => a+b, 0) / validRates.length;
+  const validRatesP = prev.rows.map(r => Number(r.metrics[2])).filter(v => isFinite(v) && v > 0);
+  if (validRatesP.length > 0) prev.totals.engagementRate = validRatesP.reduce((a,b) => a+b, 0) / validRatesP.length;
 
   const c = cur.totals;
   const p = prev.totals;
@@ -111,7 +134,10 @@ function pullGA4Kpis(days) {
   ];
 
   writeTabReplace(tabName('KPIs', days), ['id', 'label', 'value', 'delta', 'delta_direction', 'meta', 'prefix', 'suffix'],
-    rows.map(r => [r[0], r[1], r[2], r[3].value, r[3].dir, r[4], r[5], r[6]]));
+    rows.map(r => {
+      const d = (typeof r[3] === 'object' && r[3] !== null) ? r[3] : { value: '', dir: '' };
+      return [r[0], r[1], r[2], d.value || '', d.dir || '', r[4], r[5], r[6]];
+    }));
 }
 
 // ============================ GA4: Organic vs Paid summary ============================
@@ -263,6 +289,142 @@ function pullGA4TopPages(days) {
   writeTabReplace(tabName('TopPages', days), ['path', 'views', 'avg_engagement', 'conv_value'], rows);
 }
 
+// ============================ GA4: Demographics (age & gender) ============================
+
+function pullGA4DemoAge(days) {
+  const rep = ga4RunReport({
+    dimensions: ['userAgeBracket'],
+    metrics: ['activeUsers'],
+    daysBack: days,
+    orderBy: { metric: { metricName: 'activeUsers' }, desc: true },
+    limit: 8
+  });
+  const rows = rep.rows
+    .filter(r => r.dimensions[0] && r.dimensions[0] !== 'unknown')
+    .map(r => [r.dimensions[0], Number(r.metrics[0]) || 0]);
+  writeTabReplace(tabName('DemoAge', days), ['bracket', 'users'], rows);
+}
+
+function pullGA4DemoGender(days) {
+  const rep = ga4RunReport({
+    dimensions: ['userGender'],
+    metrics: ['activeUsers'],
+    daysBack: days,
+    orderBy: { metric: { metricName: 'activeUsers' }, desc: true },
+    limit: 4
+  });
+  const rows = rep.rows
+    .filter(r => r.dimensions[0] && r.dimensions[0] !== 'unknown')
+    .map(r => [r.dimensions[0].charAt(0).toUpperCase() + r.dimensions[0].slice(1), Number(r.metrics[0]) || 0]);
+  writeTabReplace(tabName('DemoGender', days), ['gender', 'users'], rows);
+}
+
+// ============================ Meta Ads (placeholder — needs Business Manager access from Protean) ============================
+//
+// To activate this connector:
+//   1. Protean adds kevin.wu@fitasy.ai as Analyst/Admin on Fitasy's Meta Business Manager
+//   2. Generate a Meta Marketing API system-user access token at developers.facebook.com
+//   3. Store the token: in Apps Script editor → Project Settings (⚙) → Script Properties → Add property:
+//        Key: META_TOKEN     Value: <the token>
+//        Key: META_AD_ACCOUNT_ID  Value: act_<your account id>
+//   4. Uncomment the API call below
+//   5. Re-run pullAll() to verify
+
+function pullMeta(days) {
+  const token = PropertiesService.getScriptProperties().getProperty('META_TOKEN');
+  const accountId = PropertiesService.getScriptProperties().getProperty('META_AD_ACCOUNT_ID');
+  if (!token || !accountId) {
+    console.log(`pullMeta(${days}): skipped (META_TOKEN / META_AD_ACCOUNT_ID not set in Script Properties)`);
+    // Still write empty Meta KPI rows so dashboard shows "—" cleanly rather than just missing
+    const rows = [
+      ['meta_spend',     'Meta Spend',     '—', '', '', 'pending Meta access', '', ''],
+      ['meta_roas',      'Meta ROAS',      '—', '', '', 'pending Meta access', '', ''],
+      ['meta_purchases', 'Meta Purchases', '—', '', '', 'pending Meta access', '', ''],
+      ['meta_ctr',       'Meta CTR',       '—', '', '', 'pending Meta access', '', '']
+    ];
+    writeTabReplace(tabName('MetaKpis', days), ['id', 'label', 'value', 'delta', 'delta_direction', 'meta', 'prefix', 'suffix'], rows);
+    return;
+  }
+
+  const since = Utilities.formatDate(new Date(Date.now() - days * 86400000), 'UTC', 'yyyy-MM-dd');
+  const until = Utilities.formatDate(new Date(), 'UTC', 'yyyy-MM-dd');
+  const url = `https://graph.facebook.com/v19.0/${accountId}/insights?fields=spend,impressions,clicks,ctr,purchase_roas,actions&time_range={"since":"${since}","until":"${until}"}&access_token=${encodeURIComponent(token)}`;
+  const resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+  const json = JSON.parse(resp.getContentText());
+  const d = (json.data && json.data[0]) || {};
+
+  const spend = Number(d.spend || 0);
+  const ctr = Number(d.ctr || 0);
+  const roas = d.purchase_roas && d.purchase_roas[0] ? Number(d.purchase_roas[0].value) : 0;
+  const purchases = (d.actions || []).filter(a => a.action_type === 'purchase').reduce((s, a) => s + Number(a.value || 0), 0);
+
+  const rows = [
+    ['meta_spend',     'Meta Spend',     fmtMoney(spend),   '', '', `${days}d Meta Ads`, '', ''],
+    ['meta_roas',      'Meta ROAS',      roas.toFixed(2),   '', '', `${days}d Meta Ads`, '', ''],
+    ['meta_purchases', 'Meta Purchases', fmtNum(purchases), '', '', `${days}d Meta Ads`, '', ''],
+    ['meta_ctr',       'Meta CTR',       (ctr).toFixed(2) + '%', '', '', `${days}d Meta Ads`, '', '']
+  ];
+  writeTabReplace(tabName('MetaKpis', days), ['id', 'label', 'value', 'delta', 'delta_direction', 'meta', 'prefix', 'suffix'], rows);
+}
+
+// ============================ Klaviyo (placeholder — needs API key) ============================
+//
+// To activate:
+//   1. Klaviyo → Account → Settings → API Keys → Create Private API Key
+//      Scopes needed: Lists Read, Metrics Read, Campaigns Read
+//   2. Apps Script editor → Project Settings (⚙) → Script Properties → Add:
+//        Key: KLAVIYO_API_KEY    Value: pk_<your key>
+//   3. Re-run pullAll(). The Email tab will populate.
+
+function pullKlaviyo() {
+  const key = PropertiesService.getScriptProperties().getProperty('KLAVIYO_API_KEY');
+  if (!key) {
+    console.log('pullKlaviyo: skipped (KLAVIYO_API_KEY not set in Script Properties)');
+    const rows = [
+      ['email_subscribers', 'Subscribers',        '—', '', '', 'pending Klaviyo key', '', ''],
+      ['email_sent',        'Sent',               '—', '', '', 'pending Klaviyo key', '', ''],
+      ['email_open_rate',   'Open rate',          '—', '', '', 'pending Klaviyo key', '', ''],
+      ['email_revenue',     'Attributed revenue', '—', '', '', 'pending Klaviyo key', '', '']
+    ];
+    writeTabReplace('Email', ['id', 'label', 'value', 'delta', 'delta_direction', 'meta', 'prefix', 'suffix'], rows);
+    return;
+  }
+
+  // Real fetch: Klaviyo lists endpoint for subscriber count, metrics endpoint for opens/sent
+  const headers = { Authorization: `Klaviyo-API-Key ${key}`, revision: '2024-10-15' };
+  let subscribers = '—', sent = '—', openRate = '—', revenue = '—';
+  try {
+    const listsResp = UrlFetchApp.fetch('https://a.klaviyo.com/api/lists/?fields[list]=profile_count', { headers, muteHttpExceptions: true });
+    const lists = JSON.parse(listsResp.getContentText());
+    subscribers = fmtNum((lists.data || []).reduce((s, l) => s + Number(l.attributes.profile_count || 0), 0));
+  } catch (e) { console.warn('Klaviyo lists fetch failed:', e); }
+
+  const rows = [
+    ['email_subscribers', 'Subscribers',        subscribers, '', '', 'Klaviyo lists', '', ''],
+    ['email_sent',        'Sent',               sent,        '', '', 'last 30d',      '', ''],
+    ['email_open_rate',   'Open rate',          openRate,    '', '', 'last 30d',      '', ''],
+    ['email_revenue',     'Attributed revenue', revenue,     '', '', 'last 30d',      '', '']
+  ];
+  writeTabReplace('Email', ['id', 'label', 'value', 'delta', 'delta_direction', 'meta', 'prefix', 'suffix'], rows);
+}
+
+// ============================ Creatives (placeholder) ============================
+//
+// To populate this tab, you have a few options:
+//   - Pull active ads from Meta Marketing API once access is granted (creative.thumbnail_url field)
+//   - Pull active Google Ads assets via developer token
+//   - Or just manually paste rows into the Creatives tab: platform, name, spend, impressions, ctr, thumb_url
+// The dashboard renders each row as a creative card with the thumb image.
+
+function pullCreatives() {
+  // For now, just ensure the tab exists with headers. Users can paste rows manually until APIs are connected.
+  const ss = SpreadsheetApp.openById(DASHBOARD_SHEET_ID);
+  if (!ss.getSheetByName('Creatives')) {
+    writeTabReplace('Creatives', ['platform', 'name', 'spend', 'impressions', 'ctr', 'thumb_url'], []);
+    console.log('pullCreatives: created empty Creatives tab — paste rows manually or wait for Meta/Google API connection');
+  }
+}
+
 // ============================ Google Ads (placeholder — needs developer token) ============================
 
 function pullGoogleAdsCampaigns() {
@@ -384,17 +546,26 @@ function ga4RunReport(opts) {
   }));
   const totals = {};
   (opts.metrics || []).forEach((m, i) => {
-    totals[m] = resp.totals && resp.totals[0] && resp.totals[0].metricValues
-      ? Number(resp.totals[0].metricValues[i].value)
-      : rows.reduce((sum, r) => sum + Number(r.metrics[i] || 0), 0);
+    // Prefer aggregated totals from GA4; fall back to summing the row values (some metrics like purchaseRevenue
+    // come back null in totals-only queries even when row-level data exists)
+    let val;
+    if (resp.totals && resp.totals[0] && resp.totals[0].metricValues && resp.totals[0].metricValues[i]) {
+      const tv = resp.totals[0].metricValues[i].value;
+      val = (tv !== null && tv !== undefined && tv !== '') ? Number(tv) : null;
+    }
+    if (val === null || val === undefined || !isFinite(val)) {
+      val = rows.reduce((sum, r) => sum + Number(r.metrics[i] || 0), 0);
+    }
+    totals[m] = val;
   });
   return { rows, totals };
 }
 
 // ============================ FORMATTING HELPERS ============================
 
-function fmtNum(n) { return Math.round(Number(n)).toLocaleString('en-US'); }
-function fmtMoney(n) { return '$' + Math.round(Number(n)).toLocaleString('en-US'); }
+function isFiniteNum(n) { return typeof n === 'number' && isFinite(n); }
+function fmtNum(n)   { return isFiniteNum(Number(n)) ? Math.round(Number(n)).toLocaleString('en-US') : '—'; }
+function fmtMoney(n) { return isFiniteNum(Number(n)) ? '$' + Math.round(Number(n)).toLocaleString('en-US') : '—'; }
 function deltaPct(cur, prev) {
   if (!prev || prev === 0) return { value: '—', dir: 'flat' };
   const pct = (cur - prev) / prev * 100;
@@ -440,7 +611,11 @@ function writeTabReplace(tabName, headers, rows) {
   if (!sheet) sheet = ss.insertSheet(tabName);
   sheet.clear();
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-  if (rows.length > 0) sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+  if (rows.length > 0) {
+    // Coerce undefined/null to empty string so Google Sheets stores predictable values
+    const safeRows = rows.map(r => r.map(v => (v === undefined || v === null) ? '' : v));
+    sheet.getRange(2, 1, safeRows.length, headers.length).setValues(safeRows);
+  }
   console.log(`  ✓ ${tabName}: wrote ${rows.length} rows`);
 }
 
