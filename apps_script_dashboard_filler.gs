@@ -32,7 +32,8 @@
 const DASHBOARD_SHEET_ID = '1IXx602iT322QYoA7fEd4BzRrBBsCDxD9MEmeecJxnME';
 const MENTIONS_SHEET_ID  = '1ZFbYEVWnZP0c1bWLMIKoN1F8ujhnADNyTHkYmDkcvpQ'; // existing brand mentions sheet
 const GA4_PROPERTY_ID    = '461873881'; // fitasy-4e9cc (the property with real traffic)
-const LOOKBACK_DAYS      = 30;
+const PERIODS            = [7, 30, 90];  // pre-compute data for these intervals; dashboard switches between them
+const DEFAULT_PERIOD     = 30;             // used for period-agnostic counts (e.g. mentions in last N days)
 
 // ============================ ENTRYPOINT ============================
 
@@ -40,19 +41,29 @@ function pullAll() {
   const t0 = Date.now();
   console.log('=== Fitasy Dashboard Filler — pullAll() ===');
 
-  try { writeConfig(); }          catch (e) { console.error('writeConfig:', e); }
-  try { pullGA4Kpis(); }          catch (e) { console.error('pullGA4Kpis:', e); }
-  try { pullGA4OvpSummary(); }    catch (e) { console.error('pullGA4OvpSummary:', e); }
-  try { pullGA4OvpChannels(); }   catch (e) { console.error('pullGA4OvpChannels:', e); }
-  try { pullGA4ChannelMix(); }    catch (e) { console.error('pullGA4ChannelMix:', e); }
-  try { pullGA4Trend(); }         catch (e) { console.error('pullGA4Trend:', e); }
-  try { pullGA4TopPages(); }      catch (e) { console.error('pullGA4TopPages:', e); }
+  try { writeConfig(); } catch (e) { console.error('writeConfig:', e); }
+
+  // GA4-derived tabs are duplicated per period (7d, 30d, 90d) so the dashboard can switch instantly
+  PERIODS.forEach(days => {
+    console.log(`--- Period: ${days} days ---`);
+    try { pullGA4Kpis(days); }        catch (e) { console.error(`pullGA4Kpis(${days}):`, e); }
+    try { pullGA4OvpSummary(days); }  catch (e) { console.error(`pullGA4OvpSummary(${days}):`, e); }
+    try { pullGA4OvpChannels(days); } catch (e) { console.error(`pullGA4OvpChannels(${days}):`, e); }
+    try { pullGA4ChannelMix(days); }  catch (e) { console.error(`pullGA4ChannelMix(${days}):`, e); }
+    try { pullGA4Trend(days); }       catch (e) { console.error(`pullGA4Trend(${days}):`, e); }
+    try { pullGA4TopPages(days); }    catch (e) { console.error(`pullGA4TopPages(${days}):`, e); }
+  });
+
+  // Period-agnostic data sources
   try { pullGoogleAdsCampaigns(); } catch (e) { console.error('pullGoogleAdsCampaigns:', e); }
-  try { pullSentiment(); }        catch (e) { console.error('pullSentiment:', e); }
-  try { pullMentions(); }         catch (e) { console.error('pullMentions:', e); }
+  try { pullSentiment(); }          catch (e) { console.error('pullSentiment:', e); }
+  try { pullMentions(); }           catch (e) { console.error('pullMentions:', e); }
 
   console.log(`=== Done in ${(Date.now() - t0) / 1000}s ===`);
 }
+
+// Helper: build period-suffixed tab name
+function tabName(base, days) { return `${base}_${days}d`; }
 
 // ============================ CONFIG TAB ============================
 
@@ -62,52 +73,54 @@ function writeConfig() {
   const synced = Utilities.formatDate(now, tz, 'd MMM yyyy HH:mm');
   writeTabReplace('Config', ['key', 'value'], [
     ['synced', synced],
-    ['period', 'Last 30 days'],
+    ['periods', PERIODS.join(',')],          // dashboard reads this to render the pill bar
+    ['default_period', String(DEFAULT_PERIOD)],
     ['property', GA4_PROPERTY_ID]
   ]);
 }
 
 // ============================ GA4: KPIs (one row per metric) ============================
 
-function pullGA4Kpis() {
+function pullGA4Kpis(days) {
   const cur = ga4RunReport({
     metrics: ['activeUsers', 'engagedSessions', 'engagementRate', 'purchaseRevenue', 'ecommercePurchases', 'averagePurchaseRevenue'],
-    daysBack: LOOKBACK_DAYS
+    daysBack: days
   });
   const prev = ga4RunReport({
     metrics: ['activeUsers', 'engagedSessions', 'engagementRate', 'purchaseRevenue', 'ecommercePurchases', 'averagePurchaseRevenue'],
-    daysBack: LOOKBACK_DAYS, daysOffset: LOOKBACK_DAYS
+    daysBack: days, daysOffset: days
   });
 
   const c = cur.totals;
   const p = prev.totals;
+  const vsPrior = `vs prior ${days}d`;
 
   const rows = [
-    ['active_users',     'Active users',     fmtNum(c.activeUsers),                 deltaPct(c.activeUsers, p.activeUsers),     'vs prior 30d', '', ''],
-    ['engaged_sessions', 'Engaged sessions', fmtNum(c.engagedSessions),             deltaPct(c.engagedSessions, p.engagedSessions), 'vs prior 30d', '', ''],
-    ['engagement_rate',  'Engagement rate',  (c.engagementRate * 100).toFixed(1) + '%', deltaPctPts(c.engagementRate * 100, p.engagementRate * 100, 'pp'), 'vs prior 30d', '', ''],
-    ['purchase_revenue', 'Purchase revenue', fmtMoney(c.purchaseRevenue),           deltaPct(c.purchaseRevenue, p.purchaseRevenue), 'vs prior 30d', '', ''],
-    ['transactions',     'Transactions',     fmtNum(c.ecommercePurchases),          deltaPct(c.ecommercePurchases, p.ecommercePurchases), 'vs prior 30d', '', ''],
-    ['aov',              'AOV',              fmtMoney(c.averagePurchaseRevenue),    deltaAbs(c.averagePurchaseRevenue, p.averagePurchaseRevenue, '$'), 'vs prior 30d', '', ''],
+    ['active_users',     'Active users',     fmtNum(c.activeUsers),                 deltaPct(c.activeUsers, p.activeUsers),     vsPrior, '', ''],
+    ['engaged_sessions', 'Engaged sessions', fmtNum(c.engagedSessions),             deltaPct(c.engagedSessions, p.engagedSessions), vsPrior, '', ''],
+    ['engagement_rate',  'Engagement rate',  (c.engagementRate * 100).toFixed(1) + '%', deltaPctPts(c.engagementRate * 100, p.engagementRate * 100, 'pp'), vsPrior, '', ''],
+    ['purchase_revenue', 'Purchase revenue', fmtMoney(c.purchaseRevenue),           deltaPct(c.purchaseRevenue, p.purchaseRevenue), vsPrior, '', ''],
+    ['transactions',     'Transactions',     fmtNum(c.ecommercePurchases),          deltaPct(c.ecommercePurchases, p.ecommercePurchases), vsPrior, '', ''],
+    ['aov',              'AOV',              fmtMoney(c.averagePurchaseRevenue),    deltaAbs(c.averagePurchaseRevenue, p.averagePurchaseRevenue, '$'), vsPrior, '', ''],
     ['cost_per_order',   'Cost / order',     '—', '', 'pending Google Ads pull', '', ''],
     ['avg_cpc',          'Avg. CPC',         '—', '', 'pending Google Ads pull', '', ''],
     ['google_cost',      'Google Ads cost',  '—', '', 'pending Google Ads pull', '', ''],
     ['roas',             'Google ROAS',      '—', '', 'pending Google Ads pull', '', ''],
     ['purchase_rate',    'Purchase rate',    ((c.ecommercePurchases / c.engagedSessions) * 100).toFixed(2) + '%', '', 'transactions / engaged sessions', '', ''],
-    ['brand_mentions',   'Brand mentions',   String(countMentions()), '', 'last 30d (auto)', '', '']
+    ['brand_mentions',   'Brand mentions',   String(countMentions(days)), '', `last ${days}d (auto)`, '', '']
   ];
 
-  writeTabReplace('KPIs', ['id', 'label', 'value', 'delta', 'delta_direction', 'meta', 'prefix', 'suffix'],
+  writeTabReplace(tabName('KPIs', days), ['id', 'label', 'value', 'delta', 'delta_direction', 'meta', 'prefix', 'suffix'],
     rows.map(r => [r[0], r[1], r[2], r[3].value, r[3].dir, r[4], r[5], r[6]]));
 }
 
 // ============================ GA4: Organic vs Paid summary ============================
 
-function pullGA4OvpSummary() {
+function pullGA4OvpSummary(days) {
   const rep = ga4RunReport({
     dimensions: ['sessionMedium'],
     metrics: ['sessions', 'purchaseRevenue', 'ecommercePurchases'],
-    daysBack: LOOKBACK_DAYS
+    daysBack: days
   });
 
   const paidMediums = ['cpc', 'ppc', 'paid', 'Paid Social', 'paid_social', 'paidsocial'];
@@ -133,7 +146,7 @@ function pullGA4OvpSummary() {
   const orgPct = totalRev > 0 ? (organic.revenue / totalRev * 100).toFixed(0) : 0;
   const paidPct = totalRev > 0 ? (paid.revenue / totalRev * 100).toFixed(0) : 0;
 
-  writeTabReplace('OvpSummary',
+  writeTabReplace(tabName('OvpSummary', days),
     ['class', 'revenue', 'sub', 'sessions', 'transactions', 'cvr', 'rev_per_session'],
     [
       ['Organic', organic.revenue, `${orgPct}% of total`, organic.sessions, organic.transactions,
@@ -147,11 +160,11 @@ function pullGA4OvpSummary() {
 
 // ============================ GA4: per-channel Organic vs Paid breakdown ============================
 
-function pullGA4OvpChannels() {
+function pullGA4OvpChannels(days) {
   const rep = ga4RunReport({
     dimensions: ['sessionSourceMedium'],
     metrics: ['sessions', 'purchaseRevenue', 'ecommercePurchases'],
-    daysBack: LOOKBACK_DAYS,
+    daysBack: days,
     orderBy: { metric: { metricName: 'sessions' }, desc: true },
     limit: 10
   });
@@ -170,18 +183,18 @@ function pullGA4OvpChannels() {
       sess ? (rev / sess) : 0];
   });
 
-  writeTabReplace('OvpChannels',
+  writeTabReplace(tabName('OvpChannels', days),
     ['channel', 'class', 'sessions', 'transactions', 'revenue', 'cvr', 'rev_per_session'],
     rows);
 }
 
 // ============================ GA4: ChannelMix (for donut) ============================
 
-function pullGA4ChannelMix() {
+function pullGA4ChannelMix(days) {
   const rep = ga4RunReport({
     dimensions: ['sessionSourceMedium'],
     metrics: ['sessions'],
-    daysBack: LOOKBACK_DAYS,
+    daysBack: days,
     orderBy: { metric: { metricName: 'sessions' }, desc: true },
     limit: 7
   });
@@ -192,16 +205,16 @@ function pullGA4ChannelMix() {
     return [r.dimensions[0], sess, total ? (sess / total * 100).toFixed(1) : 0];
   });
 
-  writeTabReplace('ChannelMix', ['source_medium', 'sessions', 'percentage'], rows);
+  writeTabReplace(tabName('ChannelMix', days), ['source_medium', 'sessions', 'percentage'], rows);
 }
 
 // ============================ GA4: daily trend (organic vs paid sessions, cost, revenue) ============================
 
-function pullGA4Trend() {
+function pullGA4Trend(days) {
   const rep = ga4RunReport({
     dimensions: ['date', 'sessionMedium'],
     metrics: ['sessions', 'purchaseRevenue'],
-    daysBack: LOOKBACK_DAYS
+    daysBack: days
   });
 
   const byDate = {};
@@ -226,16 +239,16 @@ function pullGA4Trend() {
     return [label, d.cost, d.revenue, d.organic_sessions, d.paid_sessions];
   });
 
-  writeTabReplace('Trend', ['date', 'cost', 'revenue', 'organic_sessions', 'paid_sessions'], rows);
+  writeTabReplace(tabName('Trend', days), ['date', 'cost', 'revenue', 'organic_sessions', 'paid_sessions'], rows);
 }
 
 // ============================ GA4: top pages ============================
 
-function pullGA4TopPages() {
+function pullGA4TopPages(days) {
   const rep = ga4RunReport({
     dimensions: ['pagePath'],
     metrics: ['screenPageViews', 'userEngagementDuration', 'purchaseRevenue'],
-    daysBack: LOOKBACK_DAYS,
+    daysBack: days,
     orderBy: { metric: { metricName: 'screenPageViews' }, desc: true },
     limit: 10
   });
@@ -247,7 +260,7 @@ function pullGA4TopPages() {
     const rev = Number(r.metrics[2]);
     return [path, views, avgEng, rev];
   });
-  writeTabReplace('TopPages', ['path', 'views', 'avg_engagement', 'conv_value'], rows);
+  writeTabReplace(tabName('TopPages', days), ['path', 'views', 'avg_engagement', 'conv_value'], rows);
 }
 
 // ============================ Google Ads (placeholder — needs developer token) ============================
@@ -327,14 +340,15 @@ function pullMentions() {
   writeTabReplace('Mentions', ['source', 'title', 'sentiment', 'days_ago', 'url'], rows.slice(0, 6));
 }
 
-function countMentions() {
+function countMentions(days) {
   try {
+    const lookback = days || DEFAULT_PERIOD;
     const src = SpreadsheetApp.openById(MENTIONS_SHEET_ID).getSheetByName('Mentions');
     const data = src.getDataRange().getValues();
     const headers = data[0];
     const dateIdx = headers.indexOf('Date');
     if (dateIdx < 0) return data.length - 1;
-    const cutoff = Date.now() - LOOKBACK_DAYS * 86400000;
+    const cutoff = Date.now() - lookback * 86400000;
     let n = 0;
     for (let i = 1; i < data.length; i++) {
       const d = new Date(data[i][dateIdx]);

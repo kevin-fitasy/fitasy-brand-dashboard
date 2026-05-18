@@ -76,6 +76,11 @@
   }
   .pill:hover { border-color: var(--ink-3); }
   .pill.active { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  /* Period pill bar — segmented-control feel */
+  .period-pills { display: inline-flex; gap: 0; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); overflow: hidden; padding: 2px; }
+  .period-pill { border: none; background: transparent; padding: 5px 14px; font-size: 12px; color: var(--ink-2); cursor: pointer; border-radius: 999px; font-family: inherit; transition: all .15s ease; }
+  .period-pill:hover { color: var(--ink); }
+  .period-pill.active { background: var(--ink); color: var(--bg); }
   .pill.status { font-size: 11px; padding: 4px 10px; }
   .pill.status .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
   .pill.status.live .dot { background: var(--good); animation: pulse 2s infinite; }
@@ -338,7 +343,11 @@
   </div>
   <div class="filters">
     <span class="pill status" id="status-pill"><span class="dot"></span><span class="status-text">Loading data…</span></span>
-    <span class="pill active" data-banner="period">📅 Last 30 days</span>
+    <span class="period-pills" id="period-pills">
+      <button class="pill period-pill" data-period="7">7 Days</button>
+      <button class="pill period-pill active" data-period="30">30 Days</button>
+      <button class="pill period-pill" data-period="90">90 Days</button>
+    </span>
     <a class="pill" href="https://datastudio.google.com/u/1/reporting/272fecc3-e1a5-47bb-8e1a-b973be08bcd4" target="_blank">Open in Looker Studio ↗</a>
   </div>
 </header>
@@ -624,20 +633,28 @@
 <script>
   // ============== CONFIG ==============
   const SHEET_ID = '1IXx602iT322QYoA7fEd4BzRrBBsCDxD9MEmeecJxnME'; // FitasyDashboard sheet (Kevin)
-  const TABS = {
-    config: 'Config',
-    kpis: 'KPIs',
-    ovpSummary: 'OvpSummary',
-    ovpChannels: 'OvpChannels',
-    channels: 'ChannelMix',
+  let CURRENT_PERIOD = 30;  // changes via period pills; tabs with _Nd suffix are picked dynamically
+
+  // Period-suffixed tabs (rebuilt per period) vs period-agnostic tabs (fetched once)
+  function PERIODED_TABS() {
+    const p = CURRENT_PERIOD;
+    return {
+      kpis:        `KPIs_${p}d`,
+      ovpSummary:  `OvpSummary_${p}d`,
+      ovpChannels: `OvpChannels_${p}d`,
+      channels:    `ChannelMix_${p}d`,
+      trend:       `Trend_${p}d`,
+      pages:       `TopPages_${p}d`
+    };
+  }
+  const STATIC_TABS = {
+    config:    'Config',
     campaigns: 'Campaigns',
-    trend: 'Trend',
-    pillars: 'Pillars',
-    products: 'Products',
-    pages: 'TopPages',
+    pillars:   'Pillars',
+    products:  'Products',
     sentiment: 'Sentiment',
-    mentions: 'Mentions',
-    email: 'Email'
+    mentions:  'Mentions',
+    email:     'Email'
   };
 
   // ============== CHART DEFAULTS ==============
@@ -935,38 +952,52 @@
     return String(str ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
+  // Replace "Last N Days" / "Last N days" in all section meta labels with the active period
+  function updatePeriodLabels() {
+    const re = /Last\s+\d+\s+(Days?|days?)/g;
+    document.querySelectorAll('.section-head .meta, .ovp-chart-wrap .chart-title').forEach(el => {
+      el.textContent = el.textContent.replace(re, `Last ${CURRENT_PERIOD} Days`);
+    });
+  }
+
   function applyConfig(rows) {
     if (!rows) return;
     const map = {};
     rows.forEach(r => { if (r.key) map[r.key] = r.value; });
-    if (map.synced) {
-      document.querySelector('[data-banner="sub"]').textContent = `Last 30 days · synced ${map.synced} · GA4 + Google Ads + Shopify + Klaviyo`;
+    const subEl = document.querySelector('[data-banner="sub"]');
+    if (subEl) {
+      const syncedPart = map.synced ? ` · synced ${map.synced}` : '';
+      subEl.textContent = `Last ${CURRENT_PERIOD} days${syncedPart} · GA4 + Google Ads + Shopify + Klaviyo`;
     }
-    if (map.period) {
-      document.querySelector('[data-banner="period"]').textContent = `📅 ${map.period}`;
-    }
+  }
+
+  // Destroy old chart instances before re-initialising on period switch
+  function destroyCharts() {
+    Object.values(charts).forEach(c => { if (c && c.destroy) c.destroy(); });
   }
 
   // ============== MAIN ==============
   async function init() {
-    setStatus('stale', 'Fetching live data…');
+    setStatus('stale', `Fetching ${CURRENT_PERIOD}-day data…`);
+    const T = PERIODED_TABS();
 
     const [config, kpis, ovpSummary, ovpChannels, channels, campaigns, trend, pillars, products, pages, sentiment, mentions, email] = await Promise.all([
-      fetchTab(TABS.config),
-      fetchTab(TABS.kpis),
-      fetchTab(TABS.ovpSummary),
-      fetchTab(TABS.ovpChannels),
-      fetchTab(TABS.channels),
-      fetchTab(TABS.campaigns),
-      fetchTab(TABS.trend),
-      fetchTab(TABS.pillars),
-      fetchTab(TABS.products),
-      fetchTab(TABS.pages),
-      fetchTab(TABS.sentiment),
-      fetchTab(TABS.mentions),
-      fetchTab(TABS.email)
+      fetchTab(STATIC_TABS.config),
+      fetchTab(T.kpis),
+      fetchTab(T.ovpSummary),
+      fetchTab(T.ovpChannels),
+      fetchTab(T.channels),
+      fetchTab(STATIC_TABS.campaigns),
+      fetchTab(T.trend),
+      fetchTab(STATIC_TABS.pillars),
+      fetchTab(STATIC_TABS.products),
+      fetchTab(T.pages),
+      fetchTab(STATIC_TABS.sentiment),
+      fetchTab(STATIC_TABS.mentions),
+      fetchTab(STATIC_TABS.email)
     ]);
 
+    updatePeriodLabels();
     applyConfig(config);
     populateKPIs([...(kpis || []), ...(email || [])]);
     populateOvpSummary(ovpSummary);
@@ -978,25 +1009,42 @@
     populatePages(pages);
     populateMentions(mentions);
 
+    destroyCharts();
     initOvpChart(trend);
     initCostRevChart(trend);
     initChannelsChart(channels);
     initSentimentChart(sentiment);
 
     // Status indicator
-    const fetched = [kpis, ovpSummary, channels, trend].filter(Boolean).length;
+    const fetched = [kpis, ovpSummary, channels, trend].filter(t => t && t.length > 0).length;
     if (SHEET_ID === 'PASTE_YOUR_SHEET_ID_HERE') {
       setStatus('stale', 'Demo data — sheet ID not configured');
     } else if (fetched === 0) {
-      setStatus('error', 'Could not reach sheet');
+      setStatus('error', `No ${CURRENT_PERIOD}d tabs found — run pullAll() in Apps Script`);
     } else if (fetched < 4) {
-      setStatus('stale', `${fetched}/4 core tabs loaded`);
+      setStatus('stale', `${fetched}/4 core ${CURRENT_PERIOD}d tabs loaded`);
     } else {
-      setStatus('live', 'Live · last fetched just now');
+      setStatus('live', `Live · ${CURRENT_PERIOD}-day view`);
     }
   }
 
-  document.addEventListener('DOMContentLoaded', init);
+  // Period pill click handler
+  function bindPeriodPills() {
+    document.querySelectorAll('.period-pill').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const newPeriod = parseInt(btn.dataset.period, 10);
+        if (newPeriod === CURRENT_PERIOD) return;
+        CURRENT_PERIOD = newPeriod;
+        document.querySelectorAll('.period-pill').forEach(b => b.classList.toggle('active', b === btn));
+        init();
+      });
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    bindPeriodPills();
+    init();
+  });
   document.getElementById('refresh-link').addEventListener('click', e => { e.preventDefault(); init(); });
 </script>
 </body>
