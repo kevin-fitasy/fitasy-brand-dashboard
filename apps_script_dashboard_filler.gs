@@ -63,6 +63,7 @@ function pullAll() {
   try { pullMentions(); }           catch (e) { console.error('pullMentions:', e); }
   try { pullKlaviyo(); }            catch (e) { console.error('pullKlaviyo:', e); }
   try { pullCreatives(); }          catch (e) { console.error('pullCreatives:', e); }
+  try { pullMetaCreatives(); }      catch (e) { console.error('pullMetaCreatives:', e); }
 
   console.log(`=== Done in ${(Date.now() - t0) / 1000}s ===`);
 }
@@ -365,6 +366,56 @@ function pullMeta(days) {
     ['meta_ctr',       'Meta CTR',       (ctr).toFixed(2) + '%', '', '', `${days}d Meta Ads`, '', '']
   ];
   writeTabReplace(tabName('MetaKpis', days), ['id', 'label', 'value', 'delta', 'delta_direction', 'meta', 'prefix', 'suffix'], rows);
+}
+
+/**
+ * pullMetaCreatives — populate Active Creatives section from currently-active Meta ads.
+ * Called once (not per period). Pulls the top ~12 active ads sorted by spend.
+ */
+function pullMetaCreatives() {
+  const token = PropertiesService.getScriptProperties().getProperty('META_TOKEN');
+  const accountId = PropertiesService.getScriptProperties().getProperty('META_AD_ACCOUNT_ID');
+  if (!token || !accountId) {
+    console.log('pullMetaCreatives: skipped (no Meta token)');
+    return;
+  }
+
+  // Step 1: list active ads with their insight data (last 30 days)
+  const since = Utilities.formatDate(new Date(Date.now() - 30 * 86400000), 'UTC', 'yyyy-MM-dd');
+  const until = Utilities.formatDate(new Date(), 'UTC', 'yyyy-MM-dd');
+  const fields = 'name,status,creative{thumbnail_url,name},insights.time_range({"since":"' + since + '","until":"' + until + '"}){spend,impressions,ctr,clicks}';
+  const url = `https://graph.facebook.com/v19.0/${accountId}/ads?fields=${encodeURIComponent(fields)}&filtering=[{"field":"effective_status","operator":"IN","value":["ACTIVE"]}]&limit=25&access_token=${encodeURIComponent(token)}`;
+  let resp, json;
+  try {
+    resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    json = JSON.parse(resp.getContentText());
+  } catch (e) {
+    console.warn('pullMetaCreatives fetch failed:', e);
+    return;
+  }
+  if (json.error) {
+    console.warn('pullMetaCreatives Meta API error:', json.error.message);
+    return;
+  }
+
+  const ads = (json.data || []).map(ad => {
+    const ins = (ad.insights && ad.insights.data && ad.insights.data[0]) || {};
+    return {
+      name: (ad.creative && ad.creative.name) || ad.name || '(no name)',
+      thumb: (ad.creative && ad.creative.thumbnail_url) || '',
+      spend: Number(ins.spend || 0),
+      impressions: Number(ins.impressions || 0),
+      ctr: Number(ins.ctr || 0)  // CTR is already a percent like 1.42
+    };
+  });
+
+  // Top 12 by spend
+  ads.sort((a, b) => b.spend - a.spend);
+  const top = ads.slice(0, 12);
+
+  const rows = top.map(a => ['Meta', a.name, a.spend, a.impressions, a.ctr, a.thumb]);
+  writeTabReplace('Creatives', ['platform', 'name', 'spend', 'impressions', 'ctr', 'thumb_url'], rows);
+  console.log(`pullMetaCreatives: wrote ${rows.length} active creatives`);
 }
 
 // ============================ Klaviyo (placeholder — needs API key) ============================
