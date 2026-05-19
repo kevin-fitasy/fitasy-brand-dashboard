@@ -56,9 +56,9 @@ function main() {
   while (iter.hasNext()) {
     const r = iter.next();
     const costMicros = Number(r['metrics.cost_micros'] || 0);
-    const cost = costMicros / 1_000_000;
+    const cost = costMicros / 1000000;
     const cpcMicros = Number(r['metrics.average_cpc'] || 0);
-    const cpc = cpcMicros / 1_000_000;
+    const cpc = cpcMicros / 1000000;
     const clicks = Number(r['metrics.clicks'] || 0);
     const conversions = Number(r['metrics.conversions'] || 0);
     const convValue = Number(r['metrics.conversions_value'] || 0);
