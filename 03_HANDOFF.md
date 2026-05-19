@@ -557,3 +557,83 @@ Y=3700 ┌─ Section title + "View in detail" links ─┐
 - **Chart interactions**: select each chart → ⋮ menu → "Cross-filtering" so clicking a campaign in the table filters all other widgets to that campaign.
 - **Date range picker**: add a Date control widget at top so the whole page filters together.
 
+
+
+---
+
+## Round 9 — Live deploy + null bug fix + Klaviyo + Meta scaffolding (2026-05-19)
+
+The dashboard is now **live, public-URL accessible, auto-refreshing hourly**.
+
+### Final state
+
+| Component | Status | Where |
+|---|---|---|
+| **Live URL** | ✅ Working | https://bright-truffle-d520e5.netlify.app |
+| **GitHub repo** | ✅ Pushed (3 commits) | https://github.com/kevin-fitasy/fitasy-brand-dashboard |
+| **Netlify auto-deploy** | ✅ Triggered on push to main | linked to repo |
+| **FitasyDashboard Google Sheet** | ✅ 13 tabs, auto-filled hourly | `1IXx602iT322QYoA7fEd4BzRrBBsCDxD9MEmeecJxnME` |
+| **Apps Script** `pullAll()` | ✅ Runs hourly via trigger | script.google.com under kevin.wu@fitasy.ai |
+| **GA4 connector** | ✅ Active | property `fitasy-4e9cc` (461873881) |
+| **Klaviyo connector** | ✅ Active | Script Properties: `KLAVIYO_API_KEY` |
+| **Brand Mentions** | ✅ Auto-pulled hourly | from existing mentions sheet |
+| **7/30/90 day period pills** | ✅ Working | dashboard top-right |
+| **Demographics section** | ✅ Pulls from GA4 | age + gender |
+| **Platform-tagged KPI groups** | ✅ Visible | GA4 / Google / Meta / Brand chips |
+| **Null bug** | ✅ Fixed | both Apps Script + dashboard side |
+| **Google Ads connector** | ⏳ Pending Kevin re-paste | `google_ads_script.gs` (fix: numeric separators removed) |
+| **Meta connector** | ⏳ Pending Kevin token gen | scaffold ready, needs `META_TOKEN` + `META_AD_ACCOUNT_ID` in Script Properties |
+| **Creatives section** | ⏳ Pending Meta connector | placeholder rendering correctly |
+
+### When you come back
+
+**Most-bang-for-the-buck next actions:**
+
+1. **Re-paste `google_ads_script.gs` into Google Ads Scripts editor** and click Preview again. The numeric-separator bug (`1_000_000`) that made the parser fail silently is now fixed. Once Preview succeeds, click Save and run, then set Daily frequency via the three-dot menu. This unlocks Google Ads cost/ROAS/conversions/cpc data in the dashboard.
+
+2. **Generate Meta access token** (Option A from prior conversation, 30 sec):
+   - `developers.facebook.com/tools/explorer`
+   - Add permissions: `ads_read`, `business_management`
+   - Generate Access Token → copy the `EAA...` string
+   - script.google.com → Project Settings → Script properties:
+     - `META_TOKEN` = the EAA token
+     - `META_AD_ACCOUNT_ID` = `act_` + your account ID
+   - Run `pullAll` ▶
+   - 60-day expiry — note in calendar to refresh
+
+3. **Optional polish** (any session):
+   - Rename Netlify site URL to `fitasy-dashboard.netlify.app` (Site settings → Domain management)
+   - Or add custom domain `dashboard.fitasy.ai` (DNS instructions in Netlify)
+   - Add favicon/logo upload to Netlify
+
+### What's NOT working / known gaps
+
+- **Meta KPI cards** show "—" (waiting on token)
+- **Active Creatives section** shows empty-state placeholder (waiting on Meta token + Creatives API)
+- **Google Ads cost / ROAS** cards show "—" (waiting on Google Ads Script re-paste + run)
+- **Top campaigns table** is empty (same — waiting on Google Ads Script)
+- **Active users** delta shows +98% (very high — likely comparing to a low-traffic prior period; normal for early-stage account)
+
+### Files in the repo
+
+| File | Purpose |
+|---|---|
+| `dashboard.html` | The dashboard — live data layer, ChartJS, PapaParse, no build step |
+| `apps_script_dashboard_filler.gs` | Hourly puller (GA4 + Klaviyo + sentiment + mentions + Meta scaffold) |
+| `google_ads_script.gs` | Google Ads Script — runs *inside* Google Ads, writes to Campaigns tab |
+| `netlify.toml` | Deploy config (no build, root→dashboard.html, headers) |
+| `04_LIVE_DEPLOY.md` | End-to-end deploy guide |
+| `META_TOKEN_SETUP.md` | Meta token instructions (system user path AND Graph Explorer path) |
+
+### Architectural decisions worth remembering
+
+1. **Google Sheets as warehouse, not Apps Script direct fetch**: keeps the dashboard read-side trivial (just CSV fetch via public gviz endpoint, no auth). Apps Script writes hourly; dashboard reads on every page load.
+
+2. **Period-suffixed tabs (`KPIs_7d`, `KPIs_30d`, `KPIs_90d`)**: lets the dashboard switch instantly between periods with zero API calls. Costs 3x Apps Script API quota but well within free tier.
+
+3. **PapaParse with `dynamicTyping: true`**: converts numeric cells to numbers automatically but causes empty cells to come back as JS `null` (not empty string) — the bug that caused "null" to display literally in Round 8. Now defensively handled in `isBlank()` helper.
+
+4. **Two different "Apps Script" projects exist**:
+   - `apps_script_dashboard_filler.gs` runs on Apps Script (script.google.com), hits GA4 Data API + Klaviyo API + writes to Sheet
+   - `google_ads_script.gs` runs *inside Google Ads* (different env, AdsApp library), writes to same Sheet
+   - Don't paste them into the wrong editor — they use different APIs
