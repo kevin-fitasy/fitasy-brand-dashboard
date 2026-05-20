@@ -54,6 +54,7 @@ function pullAll() {
     try { pullGA4TopPages(days); }     catch (e) { console.error(`pullGA4TopPages(${days}):`, e); }
     try { pullGA4DemoAge(days); }      catch (e) { console.error(`pullGA4DemoAge(${days}):`, e); }
     try { pullGA4DemoGender(days); }   catch (e) { console.error(`pullGA4DemoGender(${days}):`, e); }
+    try { pullGA4Geo(days); }          catch (e) { console.error(`pullGA4Geo(${days}):`, e); }
     try { pullMeta(days); }            catch (e) { console.error(`pullMeta(${days}):`, e); }
   });
 
@@ -295,29 +296,93 @@ function pullGA4TopPages(days) {
 function pullGA4DemoAge(days) {
   const rep = ga4RunReport({
     dimensions: ['userAgeBracket'],
-    metrics: ['activeUsers'],
+    metrics: ['activeUsers', 'engagedSessions', 'engagementRate', 'ecommercePurchases', 'averageSessionDuration'],
     daysBack: days,
     orderBy: { metric: { metricName: 'activeUsers' }, desc: true },
     limit: 8
   });
   const rows = rep.rows
     .filter(r => r.dimensions[0] && r.dimensions[0] !== 'unknown')
-    .map(r => [r.dimensions[0], Number(r.metrics[0]) || 0]);
-  writeTabReplace(tabName('DemoAge', days), ['bracket', 'users'], rows);
+    .map(r => [
+      r.dimensions[0],
+      Number(r.metrics[0]) || 0,                      // users
+      Number(r.metrics[1]) || 0,                      // engaged sessions
+      Number(r.metrics[2]) || 0,                      // engagement rate (0..1)
+      Number(r.metrics[3]) || 0,                      // conversions
+      Number(r.metrics[4]) || 0                       // avg session duration (sec)
+    ]);
+  writeTabReplace(tabName('DemoAge', days),
+    ['bracket', 'users', 'engaged_sessions', 'engagement_rate', 'conversions', 'avg_session_sec'],
+    rows);
 }
 
 function pullGA4DemoGender(days) {
   const rep = ga4RunReport({
     dimensions: ['userGender'],
-    metrics: ['activeUsers'],
+    metrics: ['activeUsers', 'engagedSessions', 'engagementRate', 'ecommercePurchases', 'averageSessionDuration'],
     daysBack: days,
     orderBy: { metric: { metricName: 'activeUsers' }, desc: true },
     limit: 4
   });
   const rows = rep.rows
     .filter(r => r.dimensions[0] && r.dimensions[0] !== 'unknown')
-    .map(r => [r.dimensions[0].charAt(0).toUpperCase() + r.dimensions[0].slice(1), Number(r.metrics[0]) || 0]);
-  writeTabReplace(tabName('DemoGender', days), ['gender', 'users'], rows);
+    .map(r => [
+      r.dimensions[0].charAt(0).toUpperCase() + r.dimensions[0].slice(1),
+      Number(r.metrics[0]) || 0,
+      Number(r.metrics[1]) || 0,
+      Number(r.metrics[2]) || 0,
+      Number(r.metrics[3]) || 0,
+      Number(r.metrics[4]) || 0
+    ]);
+  writeTabReplace(tabName('DemoGender', days),
+    ['gender', 'users', 'engaged_sessions', 'engagement_rate', 'conversions', 'avg_session_sec'],
+    rows);
+}
+
+// ============================ GA4: Traffic by region (country + region) ============================
+
+function pullGA4Geo(days) {
+  // Country-level
+  const countryRep = ga4RunReport({
+    dimensions: ['country'],
+    metrics: ['sessions', 'ecommercePurchases', 'purchaseRevenue', 'engagementRate'],
+    daysBack: days,
+    orderBy: { metric: { metricName: 'sessions' }, desc: true },
+    limit: 10
+  });
+  const countryRows = countryRep.rows
+    .filter(r => r.dimensions[0] && r.dimensions[0] !== '(not set)')
+    .map(r => [
+      r.dimensions[0],
+      Number(r.metrics[0]) || 0,   // sessions
+      Number(r.metrics[1]) || 0,   // transactions
+      Number(r.metrics[2]) || 0,   // revenue
+      Number(r.metrics[3]) || 0    // engagement rate (0..1)
+    ]);
+  writeTabReplace(tabName('GeoCountry', days),
+    ['country', 'sessions', 'transactions', 'revenue', 'engagement_rate'],
+    countryRows);
+
+  // Region (state/province) — most useful for US/UK breakdowns
+  const regionRep = ga4RunReport({
+    dimensions: ['country', 'region'],
+    metrics: ['sessions', 'ecommercePurchases', 'purchaseRevenue'],
+    daysBack: days,
+    orderBy: { metric: { metricName: 'sessions' }, desc: true },
+    limit: 15
+  });
+  const regionRows = regionRep.rows
+    .filter(r => r.dimensions[1] && r.dimensions[1] !== '(not set)')
+    .map(r => [
+      r.dimensions[1],
+      r.dimensions[0],
+      Number(r.metrics[0]) || 0,
+      Number(r.metrics[1]) || 0,
+      Number(r.metrics[2]) || 0
+    ]);
+  writeTabReplace(tabName('GeoRegion', days),
+    ['region', 'country', 'sessions', 'transactions', 'revenue'],
+    regionRows);
 }
 
 // ============================ Meta Ads (placeholder — needs Business Manager access from Protean) ============================

@@ -291,17 +291,42 @@
   .sentiment-date { font-size: 11px; color: var(--muted); }
 
   /* === Demographics === */
-  .demo-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 24px; }
+  .demo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
   .demo-bar-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; font-size: 13px; }
   .demo-bar-row .lbl { width: 80px; color: var(--ink-2); }
   .demo-bar-row .track { flex: 1; height: 8px; background: var(--line); border-radius: 999px; overflow: hidden; }
   .demo-bar-row .fill { height: 100%; background: var(--organic); border-radius: 999px; }
   .demo-bar-row .num { font-variant-numeric: tabular-nums; color: var(--ink-3); font-size: 12px; min-width: 50px; text-align: right; }
-  .demo-gender { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .demo-gender-card { padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); text-align: center; }
-  .demo-gender-card .pct { font-family: 'Playfair Display', serif; font-size: 32px; font-weight: 500; }
-  .demo-gender-card .name { font-size: 11px; color: var(--ink-3); letter-spacing: 0.08em; text-transform: uppercase; margin-top: 4px; }
-  .demo-gender-card .users { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  /* Multi-metric demo table */
+  .demo-table { width: 100%; font-size: 13px; border-collapse: collapse; }
+  .demo-table thead th {
+    text-align: left; padding: 8px 10px;
+    color: var(--ink-3); font-weight: 500;
+    font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
+    border-bottom: 1px solid var(--line);
+  }
+  .demo-table tbody td {
+    padding: 10px;
+    border-bottom: 1px solid var(--line);
+    color: var(--ink-2);
+    font-variant-numeric: tabular-nums;
+  }
+  .demo-table tbody td.lbl { color: var(--ink); font-weight: 500; }
+  .demo-table tbody td.num { text-align: right; }
+  .demo-table tbody tr:hover td { background: var(--bg); }
+  .demo-table .mini-bar {
+    display: inline-block;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--organic);
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+
+  /* === Geo / Traffic by Region === */
+  .geo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .geo-flag { display: inline-block; width: 20px; text-align: center; margin-right: 6px; }
 
   /* === Creatives === */
   .creatives-grid {
@@ -613,12 +638,43 @@
     </div>
     <div class="demo-grid">
       <div>
-        <div style="font-size: 11px; color: var(--ink-3); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 12px;">Age</div>
-        <div data-container="demo-age"></div>
+        <div style="font-size: 11px; color: var(--ink-3); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 12px;">By age</div>
+        <table class="demo-table">
+          <thead><tr><th>Bracket</th><th class="num">Users</th><th class="num">Engaged sessions</th><th class="num">Engagement</th><th class="num">Conv.</th></tr></thead>
+          <tbody data-container="demo-age"></tbody>
+        </table>
       </div>
       <div>
-        <div style="font-size: 11px; color: var(--ink-3); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 12px;">Gender</div>
-        <div class="demo-gender" data-container="demo-gender"></div>
+        <div style="font-size: 11px; color: var(--ink-3); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 12px;">By gender</div>
+        <table class="demo-table">
+          <thead><tr><th>Gender</th><th class="num">Users</th><th class="num">Engaged sessions</th><th class="num">Engagement</th><th class="num">Conv.</th></tr></thead>
+          <tbody data-container="demo-gender"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Section 8d: Traffic by Region ===== -->
+  <section class="section" id="geo">
+    <div class="section-head">
+      <h2>Traffic by Region</h2>
+      <div class="meta">Last 30 Days · GA4 country + region</div>
+      <a class="link" href="https://analytics.google.com/" target="_blank">View in GA4</a>
+    </div>
+    <div class="geo-grid">
+      <div>
+        <div style="font-size: 11px; color: var(--ink-3); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 12px;">By country (top 10)</div>
+        <table class="demo-table">
+          <thead><tr><th>Country</th><th class="num">Sessions</th><th class="num">Transactions</th><th class="num">Revenue</th><th class="num">Engagement</th></tr></thead>
+          <tbody data-container="geo-country"></tbody>
+        </table>
+      </div>
+      <div>
+        <div style="font-size: 11px; color: var(--ink-3); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 12px;">By region / state (top 15)</div>
+        <table class="demo-table">
+          <thead><tr><th>Region</th><th>Country</th><th class="num">Sessions</th><th class="num">Tx</th><th class="num">Revenue</th></tr></thead>
+          <tbody data-container="geo-region"></tbody>
+        </table>
       </div>
     </div>
   </section>
@@ -759,6 +815,8 @@
       pages:       `TopPages_${p}d`,
       demoAge:     `DemoAge_${p}d`,
       demoGender:  `DemoGender_${p}d`,
+      geoCountry:  `GeoCountry_${p}d`,
+      geoRegion:   `GeoRegion_${p}d`,
       metaKpis:    `MetaKpis_${p}d`
     };
   }
@@ -962,36 +1020,67 @@
     `).join('');
   }
 
-  function populateDemoAge(rows) {
-    const container = document.querySelector('[data-container="demo-age"]');
+  // Multi-metric demo table renderer (works for both age + gender)
+  function renderDemoTable(rows, container, lblKey) {
     if (!container) return;
-    if (!rows || rows.length === 0) { container.innerHTML = '<div style="color: var(--muted); font-size: 12px;">—</div>'; return; }
-    const max = Math.max(...rows.map(r => Number(r.users || 0)));
+    if (!rows || rows.length === 0) {
+      container.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">—</td></tr>';
+      return;
+    }
+    const maxUsers = Math.max(...rows.map(r => Number(r.users || 0)));
     container.innerHTML = rows.map(r => {
       const u = Number(r.users || 0);
-      const pct = max > 0 ? (u / max * 100).toFixed(0) : 0;
-      return `<div class="demo-bar-row">
-        <div class="lbl">${escapeHtml(r.bracket || '—')}</div>
-        <div class="track"><div class="fill" style="width: ${pct}%;"></div></div>
-        <div class="num">${fmt(u)}</div>
-      </div>`;
+      const eng = Number(r.engagement_rate || 0);  // 0..1
+      const widthPct = maxUsers > 0 ? Math.max(8, (u / maxUsers * 80)) : 0;
+      return `<tr>
+        <td class="lbl">${escapeHtml(r[lblKey] || '—')}</td>
+        <td class="num">${fmt(u)}<span class="mini-bar" style="width: ${widthPct.toFixed(0)}px;"></span></td>
+        <td class="num">${fmt(r.engaged_sessions)}</td>
+        <td class="num">${fmt(eng * 100, { percent: true, decimals: 0 })}</td>
+        <td class="num">${fmt(r.conversions)}</td>
+      </tr>`;
     }).join('');
   }
 
+  function populateDemoAge(rows) {
+    renderDemoTable(rows, document.querySelector('[data-container="demo-age"]'), 'bracket');
+  }
+
   function populateDemoGender(rows) {
-    const container = document.querySelector('[data-container="demo-gender"]');
+    renderDemoTable(rows, document.querySelector('[data-container="demo-gender"]'), 'gender');
+  }
+
+  // ============== Geo (country + region) ==============
+  function populateGeoCountry(rows) {
+    const container = document.querySelector('[data-container="geo-country"]');
     if (!container) return;
-    if (!rows || rows.length === 0) { container.innerHTML = '<div style="color: var(--muted); font-size: 12px; grid-column: 1 / -1;">—</div>'; return; }
-    const total = rows.reduce((s, r) => s + Number(r.users || 0), 0);
-    container.innerHTML = rows.slice(0, 2).map(r => {
-      const u = Number(r.users || 0);
-      const pct = total > 0 ? (u / total * 100).toFixed(0) : 0;
-      return `<div class="demo-gender-card">
-        <div class="pct">${pct}%</div>
-        <div class="name">${escapeHtml(r.gender || '—')}</div>
-        <div class="users">${fmt(u)} users</div>
-      </div>`;
-    }).join('');
+    if (!rows || rows.length === 0) {
+      container.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">—</td></tr>';
+      return;
+    }
+    container.innerHTML = rows.map(r => `<tr>
+      <td class="lbl">${escapeHtml(r.country || '—')}</td>
+      <td class="num">${fmt(r.sessions)}</td>
+      <td class="num">${fmt(r.transactions)}</td>
+      <td class="num">${fmt(r.revenue, { currency: true })}</td>
+      <td class="num">${fmt((Number(r.engagement_rate) || 0) * 100, { percent: true, decimals: 0 })}</td>
+    </tr>`).join('');
+  }
+
+  function populateGeoRegion(rows) {
+    const container = document.querySelector('[data-container="geo-region"]');
+    if (!container) return;
+    if (!rows || rows.length === 0) {
+      container.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">—</td></tr>';
+      return;
+    }
+    container.innerHTML = rows.map(r => `<tr>
+      <td class="lbl">${escapeHtml(r.region || '—')}</td>
+      <td>${escapeHtml(r.country || '—')}</td>
+      <td class="num">${fmt(r.sessions)}</td>
+      <td class="num">${fmt(r.transactions)}</td>
+      <td class="num">${fmt(r.revenue, { currency: true })}</td>
+    </tr>`).join('');
   }
 
   function populateCreatives(rows) {
@@ -1159,7 +1248,7 @@
     setStatus('stale', `Fetching ${CURRENT_PERIOD}-day data…`);
     const T = PERIODED_TABS();
 
-    const [config, kpis, ovpSummary, ovpChannels, channels, campaigns, trend, pillars, products, pages, sentiment, mentions, email, demoAge, demoGender, metaKpis, creatives] = await Promise.all([
+    const [config, kpis, ovpSummary, ovpChannels, channels, campaigns, trend, pillars, products, pages, sentiment, mentions, email, demoAge, demoGender, geoCountry, geoRegion, metaKpis, creatives] = await Promise.all([
       fetchTab(STATIC_TABS.config),
       fetchTab(T.kpis),
       fetchTab(T.ovpSummary),
@@ -1175,6 +1264,8 @@
       fetchTab(STATIC_TABS.email),
       fetchTab(T.demoAge),
       fetchTab(T.demoGender),
+      fetchTab(T.geoCountry),
+      fetchTab(T.geoRegion),
       fetchTab(T.metaKpis),
       fetchTab(STATIC_TABS.creatives)
     ]);
@@ -1191,6 +1282,8 @@
     populatePages(pages);
     populateDemoAge(demoAge);
     populateDemoGender(demoGender);
+    populateGeoCountry(geoCountry);
+    populateGeoRegion(geoRegion);
     populateCreatives(creatives);
     populateMentions(mentions);
 
