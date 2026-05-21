@@ -730,10 +730,16 @@ function writeTabReplace(tabName, headers, rows) {
   let sheet = ss.getSheetByName(tabName);
   if (!sheet) sheet = ss.insertSheet(tabName);
   sheet.clear();
+  const totalRows = rows.length + 1;
+  // Force every cell to PLAIN TEXT format before writing. This stops the gviz CSV
+  // export from type-coercing the `value` column (which has mixed currency / ratio /
+  // percent strings) and dropping cells it can't parse. The dashboard does Number()
+  // coercion on its side, so text storage is safe for numeric tabs too.
+  sheet.getRange(1, 1, totalRows, headers.length).setNumberFormat('@');
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
   if (rows.length > 0) {
-    // Coerce undefined/null to empty string so Google Sheets stores predictable values
-    const safeRows = rows.map(r => r.map(v => (v === undefined || v === null) ? '' : v));
+    // Coerce undefined/null to empty string, everything else to string
+    const safeRows = rows.map(r => r.map(v => (v === undefined || v === null) ? '' : String(v)));
     sheet.getRange(2, 1, safeRows.length, headers.length).setValues(safeRows);
   }
   console.log(`  ✓ ${tabName}: wrote ${rows.length} rows`);

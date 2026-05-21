@@ -843,7 +843,9 @@
   // ============== FETCH HELPERS ==============
   async function fetchTab(tabName) {
     if (!SHEET_ID || SHEET_ID === 'PASTE_YOUR_SHEET_ID_HERE') return null;
-    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}`;
+    // headers=1 forces gviz to treat exactly ONE row as the header — without it,
+    // gviz merges header + first data row when the first data row is all-text
+    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&headers=1&sheet=${encodeURIComponent(tabName)}`;
     try {
       const resp = await fetch(url);
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
