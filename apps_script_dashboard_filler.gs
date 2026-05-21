@@ -57,6 +57,8 @@ function pullAll() {
     try { pullGA4Geo(days); }          catch (e) { console.error(`pullGA4Geo(${days}):`, e); }
     try { pullGA4Funnel(days); }       catch (e) { console.error(`pullGA4Funnel(${days}):`, e); }
     try { pullGA4Quality(days); }      catch (e) { console.error(`pullGA4Quality(${days}):`, e); }
+    try { pullGA4Products(days); }     catch (e) { console.error(`pullGA4Products(${days}):`, e); }
+    try { pullGA4Pillars(days); }      catch (e) { console.error(`pullGA4Pillars(${days}):`, e); }
     try { pullMeta(days); }            catch (e) { console.error(`pullMeta(${days}):`, e); }
   });
 
@@ -385,6 +387,64 @@ function pullGA4Geo(days) {
   writeTabReplace(tabName('GeoRegion', days),
     ['region', 'country', 'sessions', 'transactions', 'revenue'],
     regionRows);
+}
+
+// ============================ GA4: Top Products (ecommerce items) ============================
+function pullGA4Products(days) {
+  const rep = ga4RunReport({
+    dimensions: ['itemName'],
+    metrics: ['itemsViewed', 'itemsAddedToCart', 'itemsPurchased', 'itemRevenue'],
+    daysBack: days,
+    orderBy: { metric: { metricName: 'itemRevenue' }, desc: true },
+    limit: 12
+  });
+  const rows = rep.rows
+    .filter(r => r.dimensions[0] && r.dimensions[0] !== '(not set)')
+    .map(r => {
+      const viewed    = Number(r.metrics[0]) || 0;
+      const atc       = Number(r.metrics[1]) || 0;
+      const purchased = Number(r.metrics[2]) || 0;
+      const revenue   = Number(r.metrics[3]) || 0;
+      const atcRate   = viewed > 0 ? (atc / viewed * 100) : 0;
+      return [r.dimensions[0], purchased, revenue, atcRate.toFixed(1) + '%', viewed];
+    });
+  writeTabReplace(tabName('Products', days), ['product', 'units', 'revenue', 'atc_rate', 'pdp_sessions'], rows);
+}
+
+// ============================ GA4: Performance by Brand Pillar ============================
+// Maps each ecommerce item to a Fitasy brand pillar via keyword match on the product name.
+function pullGA4Pillars(days) {
+  const rep = ga4RunReport({
+    dimensions: ['itemName'],
+    metrics: ['itemsViewed', 'itemsAddedToCart', 'itemsPurchased', 'itemRevenue'],
+    daysBack: days,
+    limit: 200
+  });
+  function pillarOf(name) {
+    const n = (name || '').toLowerCase();
+    if (n.indexOf('precis') >= 0)                                   return 'Precision Fit';
+    if (n.indexOf('style') >= 0)                                    return 'Style';
+    if (n.indexOf('eco') >= 0)                                      return 'ECO';
+    if (n.indexOf('tech') >= 0)                                     return 'Tech';
+    if (n.indexOf('ortho') >= 0 || n.indexOf('insole') >= 0 ||
+        n.indexOf('medical') >= 0 || n.indexOf('prosthet') >= 0)    return 'Ortho';
+    if (n.indexOf('confidence') >= 0)                               return 'Confidence';
+    return 'Other';
+  }
+  const byPillar = {};
+  rep.rows.forEach(r => {
+    const p = pillarOf(r.dimensions[0]);
+    if (!byPillar[p]) byPillar[p] = { sessions: 0, atc: 0, tx: 0, revenue: 0 };
+    byPillar[p].sessions += Number(r.metrics[0]) || 0;
+    byPillar[p].atc      += Number(r.metrics[1]) || 0;
+    byPillar[p].tx       += Number(r.metrics[2]) || 0;
+    byPillar[p].revenue  += Number(r.metrics[3]) || 0;
+  });
+  const order = ['Precision Fit', 'Style', 'ECO', 'Tech', 'Ortho', 'Confidence', 'Other'];
+  const rows = order
+    .filter(p => byPillar[p])
+    .map(p => [p, byPillar[p].sessions, byPillar[p].atc, byPillar[p].tx, byPillar[p].revenue]);
+  writeTabReplace(tabName('Pillars', days), ['pillar', 'sessions', 'atc', 'transactions', 'revenue'], rows);
 }
 
 // ============================ GA4: Conversion Funnel ============================

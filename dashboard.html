@@ -650,7 +650,7 @@
   <section class="section" id="products">
     <div class="section-head">
       <h2>Top Products</h2>
-      <div class="meta">Last 30 Days · Shopify</div>
+      <div class="meta">Last 30 Days · GA4 ecommerce items</div>
       <a class="link" href="https://fitasy.myshopify.com/admin/analytics" target="_blank">View in Shopify</a>
     </div>
     <table>
@@ -882,14 +882,14 @@
       geoRegion:   `GeoRegion_${p}d`,
       metaKpis:    `MetaKpis_${p}d`,
       funnel:      `Funnel_${p}d`,
-      quality:     `Quality_${p}d`
+      quality:     `Quality_${p}d`,
+      products:    `Products_${p}d`,
+      pillars:     `Pillars_${p}d`
     };
   }
   const STATIC_TABS = {
     config:    'Config',
     campaigns: 'Campaigns',
-    pillars:   'Pillars',
-    products:  'Products',
     sentiment: 'Sentiment',
     mentions:  'Mentions',
     email:     'Email',
@@ -1025,9 +1025,17 @@
     `).join('');
   }
 
+  function emptyRow(tbody, cols, msg) {
+    if (tbody) tbody.innerHTML = `<tr><td colspan="${cols}" style="text-align:center;color:var(--muted);padding:24px;">${msg}</td></tr>`;
+  }
+
   function populateCampaigns(rows) {
     const tbody = document.querySelector('[data-tbody="campaigns"]');
-    if (!tbody || !rows) return;
+    if (!tbody) return;
+    if (!rows || rows.length === 0) {
+      emptyRow(tbody, 7, 'Awaiting Google Ads connection — install <code>google_ads_script.gs</code> in Google Ads → Tools → Scripts.');
+      return;
+    }
     tbody.innerHTML = rows.map(r => `
       <tr>
         <td>${escapeHtml(r.campaign || '')}</td>
@@ -1043,7 +1051,11 @@
 
   function populatePillars(rows) {
     const tbody = document.querySelector('[data-tbody="pillars"]');
-    if (!tbody || !rows) return;
+    if (!tbody) return;
+    if (!rows || rows.length === 0) {
+      emptyRow(tbody, 6, 'Populates on the next Apps Script <code>pullAll</code> run.');
+      return;
+    }
     const max = Math.max(...rows.map(r => Number(r.sessions || 0)));
     tbody.innerHTML = rows.map(r => {
       const pct = max > 0 ? (Number(r.sessions || 0) / max) * 100 : 0;
@@ -1062,7 +1074,11 @@
 
   function populateProducts(rows) {
     const tbody = document.querySelector('[data-tbody="products"]');
-    if (!tbody || !rows) return;
+    if (!tbody) return;
+    if (!rows || rows.length === 0) {
+      emptyRow(tbody, 5, 'Populates on the next Apps Script <code>pullAll</code> run.');
+      return;
+    }
     tbody.innerHTML = rows.map(r => `
       <tr>
         <td>${escapeHtml(r.product || '')}</td>
@@ -1345,8 +1361,8 @@
       fetchTab(T.channels),
       fetchTab(STATIC_TABS.campaigns),
       fetchTab(T.trend),
-      fetchTab(STATIC_TABS.pillars),
-      fetchTab(STATIC_TABS.products),
+      fetchTab(T.pillars),
+      fetchTab(T.products),
       fetchTab(T.pages),
       fetchTab(STATIC_TABS.sentiment),
       fetchTab(STATIC_TABS.mentions),
