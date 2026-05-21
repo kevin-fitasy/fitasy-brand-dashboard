@@ -55,6 +55,8 @@ function pullAll() {
     try { pullGA4DemoAge(days); }      catch (e) { console.error(`pullGA4DemoAge(${days}):`, e); }
     try { pullGA4DemoGender(days); }   catch (e) { console.error(`pullGA4DemoGender(${days}):`, e); }
     try { pullGA4Geo(days); }          catch (e) { console.error(`pullGA4Geo(${days}):`, e); }
+    try { pullGA4Funnel(days); }       catch (e) { console.error(`pullGA4Funnel(${days}):`, e); }
+    try { pullGA4Quality(days); }      catch (e) { console.error(`pullGA4Quality(${days}):`, e); }
     try { pullMeta(days); }            catch (e) { console.error(`pullMeta(${days}):`, e); }
   });
 
@@ -385,6 +387,62 @@ function pullGA4Geo(days) {
     regionRows);
 }
 
+// ============================ GA4: Conversion Funnel ============================
+// Ecommerce funnel: view_item → add_to_cart → begin_checkout → purchase
+function pullGA4Funnel(days) {
+  const rep = ga4RunReport({
+    dimensions: ['eventName'],
+    metrics: ['eventCount'],
+    daysBack: days
+  });
+  const counts = {};
+  rep.rows.forEach(r => { counts[r.dimensions[0]] = Number(r.metrics[0]) || 0; });
+  const steps = [
+    ['View item',      counts['view_item']      || 0],
+    ['Add to cart',    counts['add_to_cart']    || 0],
+    ['Begin checkout', counts['begin_checkout'] || 0],
+    ['Purchase',       counts['purchase']       || 0]
+  ];
+  const top = steps[0][1] || 1;
+  const rows = steps.map((s, i) => {
+    const prev = i > 0 ? steps[i - 1][1] : s[1];
+    const stepPct = prev > 0 ? (s[1] / prev * 100) : 0;        // conversion from previous step
+    const ofTop = top > 0 ? (s[1] / top * 100) : 0;            // share of the top of funnel
+    return [s[0], s[1], i === 0 ? 100 : stepPct, ofTop];
+  });
+  writeTabReplace(tabName('Funnel', days), ['step', 'count', 'step_pct', 'of_top_pct'], rows);
+}
+
+// ============================ GA4: Traffic Quality ============================
+function pullGA4Quality(days) {
+  const rep = ga4RunReport({
+    dimensions: ['date'],
+    metrics: ['engagementRate', 'averageSessionDuration', 'screenPageViewsPerSession', 'newUsers', 'totalUsers', 'bounceRate'],
+    daysBack: days
+  });
+  // Rate metrics: average across days. Count metrics: use the summed totals.
+  const avgOf = (idx) => {
+    const vals = rep.rows.map(r => Number(r.metrics[idx])).filter(v => isFinite(v));
+    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+  };
+  const engRate = avgOf(0);
+  const avgDur = avgOf(1);
+  const pagesPerSession = avgOf(2);
+  const bounce = avgOf(5);
+  const newUsers = rep.totals.newUsers || 0;
+  const totalUsers = rep.totals.totalUsers || 0;
+  const newPct = totalUsers > 0 ? (newUsers / totalUsers * 100) : 0;
+
+  const rows = [
+    ['quality_engagement', 'Engagement rate',  (engRate * 100).toFixed(1) + '%', '', '', `${days}d average`,        '', ''],
+    ['quality_duration',   'Avg. session',     secondsToHms(avgDur),             '', '', `${days}d average`,        '', ''],
+    ['quality_pages',      'Pages / session',  pagesPerSession.toFixed(1),        '', '', `${days}d average`,        '', ''],
+    ['quality_newpct',     'New users',        newPct.toFixed(0) + '%',           '', '', 'share of total users',    '', ''],
+    ['quality_bounce',     'Bounce rate',      (bounce * 100).toFixed(1) + '%',  '', '', `${days}d average`,        '', '']
+  ];
+  writeTabReplace(tabName('Quality', days), ['id', 'label', 'value', 'delta', 'delta_direction', 'meta', 'prefix', 'suffix'], rows);
+}
+
 // ============================ Meta Ads (placeholder — needs Business Manager access from Protean) ============================
 //
 // To activate this connector:
@@ -403,10 +461,14 @@ function pullMeta(days) {
     console.log(`pullMeta(${days}): skipped (META_TOKEN / META_AD_ACCOUNT_ID not set in Script Properties)`);
     // Still write empty Meta KPI rows so dashboard shows "—" cleanly rather than just missing
     const rows = [
-      ['meta_spend',     'Meta Spend',     '—', '', '', 'pending Meta access', '', ''],
-      ['meta_roas',      'Meta ROAS',      '—', '', '', 'pending Meta access', '', ''],
-      ['meta_purchases', 'Meta Purchases', '—', '', '', 'pending Meta access', '', ''],
-      ['meta_ctr',       'Meta CTR',       '—', '', '', 'pending Meta access', '', '']
+      ['meta_spend',       'Meta Spend',       '—', '', '', 'pending Meta access', '', ''],
+      ['meta_roas',        'Meta ROAS',        '—', '', '', 'pending Meta access', '', ''],
+      ['meta_purchases',   'Meta Purchases',   '—', '', '', 'pending Meta access', '', ''],
+      ['meta_ctr',         'Meta CTR',         '—', '', '', 'pending Meta access', '', ''],
+      ['meta_impressions', 'Meta Impressions', '—', '', '', 'pending Meta access', '', ''],
+      ['meta_cpm',         'Meta CPM',         '—', '', '', 'pending Meta access', '', ''],
+      ['meta_reach',       'Meta Reach',       '—', '', '', 'pending Meta access', '', ''],
+      ['meta_frequency',   'Meta Frequency',   '—', '', '', 'pending Meta access', '', '']
     ];
     writeTabReplace(tabName('MetaKpis', days), ['id', 'label', 'value', 'delta', 'delta_direction', 'meta', 'prefix', 'suffix'], rows);
     return;
@@ -416,21 +478,29 @@ function pullMeta(days) {
   const until = Utilities.formatDate(new Date(), 'UTC', 'yyyy-MM-dd');
   // time_range JSON must be URL-encoded — UrlFetchApp rejects raw { } " characters
   const timeRange = encodeURIComponent(JSON.stringify({ since: since, until: until }));
-  const url = `https://graph.facebook.com/v19.0/${accountId}/insights?fields=spend,impressions,clicks,ctr,purchase_roas,actions&time_range=${timeRange}&access_token=${encodeURIComponent(token)}`;
+  const url = `https://graph.facebook.com/v19.0/${accountId}/insights?fields=spend,impressions,clicks,ctr,cpm,reach,frequency,purchase_roas,actions&time_range=${timeRange}&access_token=${encodeURIComponent(token)}`;
   const resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
   const json = JSON.parse(resp.getContentText());
   const d = (json.data && json.data[0]) || {};
 
   const spend = Number(d.spend || 0);
   const ctr = Number(d.ctr || 0);
+  const cpm = Number(d.cpm || 0);
+  const reach = Number(d.reach || 0);
+  const frequency = Number(d.frequency || 0);
+  const impressions = Number(d.impressions || 0);
   const roas = d.purchase_roas && d.purchase_roas[0] ? Number(d.purchase_roas[0].value) : 0;
   const purchases = (d.actions || []).filter(a => a.action_type === 'purchase').reduce((s, a) => s + Number(a.value || 0), 0);
 
   const rows = [
-    ['meta_spend',     'Meta Spend',     fmtMoney(spend),   '', '', `${days}d Meta Ads`, '', ''],
-    ['meta_roas',      'Meta ROAS',      roas.toFixed(2),   '', '', `${days}d Meta Ads`, '', ''],
-    ['meta_purchases', 'Meta Purchases', fmtNum(purchases), '', '', `${days}d Meta Ads`, '', ''],
-    ['meta_ctr',       'Meta CTR',       (ctr).toFixed(2) + '%', '', '', `${days}d Meta Ads`, '', '']
+    ['meta_spend',       'Meta Spend',       fmtMoney(spend),         '', '', `${days}d Meta Ads`, '', ''],
+    ['meta_roas',        'Meta ROAS',        roas.toFixed(2),         '', '', `${days}d Meta Ads`, '', ''],
+    ['meta_purchases',   'Meta Purchases',   fmtNum(purchases),       '', '', `${days}d Meta Ads`, '', ''],
+    ['meta_ctr',         'Meta CTR',         ctr.toFixed(2) + '%',    '', '', `${days}d Meta Ads`, '', ''],
+    ['meta_impressions', 'Meta Impressions', fmtNum(impressions),     '', '', `${days}d Meta Ads`, '', ''],
+    ['meta_cpm',         'Meta CPM',         '$' + cpm.toFixed(2),    '', '', 'cost per 1k impr.', '', ''],
+    ['meta_reach',       'Meta Reach',       fmtNum(reach),           '', '', 'unique people',     '', ''],
+    ['meta_frequency',   'Meta Frequency',   frequency.toFixed(2),    '', '', 'avg impr. / person','', '']
   ];
   writeTabReplace(tabName('MetaKpis', days), ['id', 'label', 'value', 'delta', 'delta_direction', 'meta', 'prefix', 'suffix'], rows);
 }

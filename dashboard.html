@@ -328,6 +328,25 @@
   .geo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
   .geo-flag { display: inline-block; width: 20px; text-align: center; margin-right: 6px; }
 
+  /* === Conversion Funnel === */
+  .funnel-step { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; }
+  .funnel-step .step-name { width: 130px; font-size: 13px; color: var(--ink-2); flex-shrink: 0; }
+  .funnel-step .step-track { flex: 1; height: 44px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .funnel-step .step-fill {
+    height: 100%; border-radius: 7px;
+    display: flex; align-items: center; padding-left: 16px;
+    color: white; font-weight: 500; font-size: 14px;
+    font-variant-numeric: tabular-nums;
+    background: linear-gradient(135deg, var(--paid), #2a3438);
+    min-width: 60px;
+    transition: width .4s ease;
+  }
+  .funnel-step:nth-child(1) .step-fill { background: linear-gradient(135deg, var(--ink-3), #4d6878); }
+  .funnel-step:nth-child(2) .step-fill { background: linear-gradient(135deg, var(--organic), var(--organic-deep)); }
+  .funnel-step:nth-child(3) .step-fill { background: linear-gradient(135deg, var(--highlight), #968d63); }
+  .funnel-step:nth-child(4) .step-fill { background: linear-gradient(135deg, var(--paid), #2a3438); }
+  .funnel-step .step-meta { width: 160px; font-size: 12px; color: var(--ink-3); text-align: right; flex-shrink: 0; }
+
   /* === Creatives === */
   .creatives-grid {
     display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -497,6 +516,21 @@
     </div>
   </section>
 
+  <!-- ===== Section 1b: Reach & Awareness ===== -->
+  <section class="section" id="awareness">
+    <div class="section-head">
+      <h2>Reach &amp; Awareness</h2>
+      <div class="meta">Last 30 Days · Meta Ads</div>
+      <a class="link" href="https://business.facebook.com/" target="_blank">View in Meta Ads Manager</a>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi" data-kpi="meta_impressions"><span class="source-tag meta">Meta</span><div class="label">Impressions</div><div class="value">—</div><div class="meta"><span class="meta-text">total ad views</span></div></div>
+      <div class="kpi" data-kpi="meta_reach"><span class="source-tag meta">Meta</span><div class="label">Reach</div><div class="value">—</div><div class="meta"><span class="meta-text">unique people</span></div></div>
+      <div class="kpi" data-kpi="meta_frequency"><span class="source-tag meta">Meta</span><div class="label">Frequency</div><div class="value">—</div><div class="meta"><span class="meta-text">avg impressions / person</span></div></div>
+      <div class="kpi" data-kpi="meta_cpm"><span class="source-tag meta">Meta</span><div class="label">CPM</div><div class="value">—</div><div class="meta"><span class="meta-text">cost per 1,000 impressions</span></div></div>
+    </div>
+  </section>
+
   <!-- ===== Section 2: ORGANIC vs PAID ===== -->
   <section class="section" id="organic-paid">
     <div class="section-head">
@@ -570,6 +604,19 @@
     </div>
   </section>
 
+  <!-- ===== Section 4b: Conversion Funnel ===== -->
+  <section class="section" id="funnel">
+    <div class="section-head">
+      <h2>Conversion Funnel</h2>
+      <div class="meta">Last 30 Days · GA4 ecommerce events</div>
+      <a class="link" href="https://analytics.google.com/" target="_blank">View in GA4</a>
+    </div>
+    <div data-container="funnel"></div>
+    <div style="margin-top: 16px; font-size: 12px; color: var(--ink-3);">
+      Each bar's width = share of the top of funnel. The right-hand figure is the conversion rate from the previous step.
+    </div>
+  </section>
+
   <!-- ===== Section 5: Campaign Performance ===== -->
   <section class="section" id="campaigns">
     <div class="section-head">
@@ -627,6 +674,22 @@
       </tr></thead>
       <tbody data-tbody="pages"></tbody>
     </table>
+  </section>
+
+  <!-- ===== Section 8a: Traffic Quality ===== -->
+  <section class="section" id="quality">
+    <div class="section-head">
+      <h2>Traffic Quality</h2>
+      <div class="meta">Last 30 Days · GA4 engagement signals</div>
+      <a class="link" href="https://analytics.google.com/" target="_blank">View in GA4</a>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi" data-kpi="quality_engagement"><span class="source-tag ga4">GA4</span><div class="label">Engagement rate</div><div class="value">—</div><div class="meta"><span class="meta-text">—</span></div></div>
+      <div class="kpi" data-kpi="quality_duration"><span class="source-tag ga4">GA4</span><div class="label">Avg. session</div><div class="value">—</div><div class="meta"><span class="meta-text">—</span></div></div>
+      <div class="kpi" data-kpi="quality_pages"><span class="source-tag ga4">GA4</span><div class="label">Pages / session</div><div class="value">—</div><div class="meta"><span class="meta-text">—</span></div></div>
+      <div class="kpi" data-kpi="quality_newpct"><span class="source-tag ga4">GA4</span><div class="label">New users</div><div class="value">—</div><div class="meta"><span class="meta-text">—</span></div></div>
+      <div class="kpi" data-kpi="quality_bounce"><span class="source-tag ga4">GA4</span><div class="label">Bounce rate</div><div class="value">—</div><div class="meta"><span class="meta-text">—</span></div></div>
+    </div>
   </section>
 
   <!-- ===== Section 8b: Audience Demographics ===== -->
@@ -817,7 +880,9 @@
       demoGender:  `DemoGender_${p}d`,
       geoCountry:  `GeoCountry_${p}d`,
       geoRegion:   `GeoRegion_${p}d`,
-      metaKpis:    `MetaKpis_${p}d`
+      metaKpis:    `MetaKpis_${p}d`,
+      funnel:      `Funnel_${p}d`,
+      quality:     `Quality_${p}d`
     };
   }
   const STATIC_TABS = {
@@ -1052,6 +1117,28 @@
     renderDemoTable(rows, document.querySelector('[data-container="demo-gender"]'), 'gender');
   }
 
+  // ============== Conversion Funnel ==============
+  function populateFunnel(rows) {
+    const c = document.querySelector('[data-container="funnel"]');
+    if (!c) return;
+    if (!rows || rows.length === 0) {
+      c.innerHTML = '<div style="color:var(--muted);font-size:13px;">—</div>';
+      return;
+    }
+    c.innerHTML = rows.map((r, i) => {
+      const ofTop = Number(r.of_top_pct) || 0;
+      const stepPct = Number(r.step_pct) || 0;
+      const metaText = i === 0
+        ? 'top of funnel'
+        : `↓ ${stepPct.toFixed(1)}% from previous`;
+      return `<div class="funnel-step">
+        <div class="step-name">${escapeHtml(r.step || '—')}</div>
+        <div class="step-track"><div class="step-fill" style="width: ${Math.max(ofTop, 6).toFixed(1)}%;">${fmt(r.count)}</div></div>
+        <div class="step-meta">${metaText}</div>
+      </div>`;
+    }).join('');
+  }
+
   // ============== Geo (country + region) ==============
   function populateGeoCountry(rows) {
     const container = document.querySelector('[data-container="geo-country"]');
@@ -1250,7 +1337,7 @@
     setStatus('stale', `Fetching ${CURRENT_PERIOD}-day data…`);
     const T = PERIODED_TABS();
 
-    const [config, kpis, ovpSummary, ovpChannels, channels, campaigns, trend, pillars, products, pages, sentiment, mentions, email, demoAge, demoGender, geoCountry, geoRegion, metaKpis, creatives] = await Promise.all([
+    const [config, kpis, ovpSummary, ovpChannels, channels, campaigns, trend, pillars, products, pages, sentiment, mentions, email, demoAge, demoGender, geoCountry, geoRegion, metaKpis, creatives, funnel, quality] = await Promise.all([
       fetchTab(STATIC_TABS.config),
       fetchTab(T.kpis),
       fetchTab(T.ovpSummary),
@@ -1269,12 +1356,14 @@
       fetchTab(T.geoCountry),
       fetchTab(T.geoRegion),
       fetchTab(T.metaKpis),
-      fetchTab(STATIC_TABS.creatives)
+      fetchTab(STATIC_TABS.creatives),
+      fetchTab(T.funnel),
+      fetchTab(T.quality)
     ]);
 
     updatePeriodLabels();
     applyConfig(config);
-    populateKPIs([...(kpis || []), ...(email || []), ...(metaKpis || [])]);
+    populateKPIs([...(kpis || []), ...(email || []), ...(metaKpis || []), ...(quality || [])]);
     populateOvpSummary(ovpSummary);
     populateOvpChannels(ovpChannels);
     populateChannelsTable(channels);
@@ -1286,6 +1375,7 @@
     populateDemoGender(demoGender);
     populateGeoCountry(geoCountry);
     populateGeoRegion(geoRegion);
+    populateFunnel(funnel);
     populateCreatives(creatives);
     populateMentions(mentions);
 
