@@ -414,7 +414,9 @@ function pullMeta(days) {
 
   const since = Utilities.formatDate(new Date(Date.now() - days * 86400000), 'UTC', 'yyyy-MM-dd');
   const until = Utilities.formatDate(new Date(), 'UTC', 'yyyy-MM-dd');
-  const url = `https://graph.facebook.com/v19.0/${accountId}/insights?fields=spend,impressions,clicks,ctr,purchase_roas,actions&time_range={"since":"${since}","until":"${until}"}&access_token=${encodeURIComponent(token)}`;
+  // time_range JSON must be URL-encoded — UrlFetchApp rejects raw { } " characters
+  const timeRange = encodeURIComponent(JSON.stringify({ since: since, until: until }));
+  const url = `https://graph.facebook.com/v19.0/${accountId}/insights?fields=spend,impressions,clicks,ctr,purchase_roas,actions&time_range=${timeRange}&access_token=${encodeURIComponent(token)}`;
   const resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
   const json = JSON.parse(resp.getContentText());
   const d = (json.data && json.data[0]) || {};
@@ -449,7 +451,9 @@ function pullMetaCreatives() {
   const since = Utilities.formatDate(new Date(Date.now() - 30 * 86400000), 'UTC', 'yyyy-MM-dd');
   const until = Utilities.formatDate(new Date(), 'UTC', 'yyyy-MM-dd');
   const fields = 'name,status,creative{thumbnail_url,name},insights.time_range({"since":"' + since + '","until":"' + until + '"}){spend,impressions,ctr,clicks}';
-  const url = `https://graph.facebook.com/v19.0/${accountId}/ads?fields=${encodeURIComponent(fields)}&filtering=[{"field":"effective_status","operator":"IN","value":["ACTIVE"]}]&limit=25&access_token=${encodeURIComponent(token)}`;
+  // Both fields and filtering must be URL-encoded — UrlFetchApp rejects raw { } [ ] " characters
+  const filtering = JSON.stringify([{ field: 'effective_status', operator: 'IN', value: ['ACTIVE'] }]);
+  const url = `https://graph.facebook.com/v19.0/${accountId}/ads?fields=${encodeURIComponent(fields)}&filtering=${encodeURIComponent(filtering)}&limit=25&access_token=${encodeURIComponent(token)}`;
   let resp, json;
   try {
     resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
