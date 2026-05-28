@@ -53,15 +53,8 @@
     display: flex; align-items: center; gap: 16px;
   }
   .brand { display: flex; align-items: center; gap: 12px; }
-  .brand-mark {
-    width: 32px; height: 32px; border-radius: 4px;
-    background: var(--ink); color: var(--bg);
-    display: grid; place-items: center;
-    font-family: 'Playfair Display', serif;
-    font-weight: 700; font-size: 18px; letter-spacing: -0.02em;
-  }
-  .brand-name { font-family: 'Playfair Display', serif; font-size: 18px; letter-spacing: -0.01em; }
-  .brand-sub { color: var(--ink-3); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; margin-left: 4px; }
+  .brand-logo { height: 28px; width: auto; display: block; }
+  .brand-sub { color: var(--ink-3); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
   .filters { margin-left: auto; display: flex; align-items: center; gap: 8px; }
   .pill {
     display: inline-flex; align-items: center; gap: 6px;
@@ -81,6 +74,14 @@
   .period-pill { border: none; background: transparent; padding: 5px 14px; font-size: 12px; color: var(--ink-2); cursor: pointer; border-radius: 999px; font-family: inherit; transition: all .15s ease; }
   .period-pill:hover { color: var(--ink); }
   .period-pill.active { background: var(--ink); color: var(--bg); }
+  /* Custom date-range picker */
+  .custom-range { display: inline-flex; align-items: center; gap: 6px; }
+  .date-input { font-family: inherit; font-size: 12px; padding: 5px 9px; border: 1px solid var(--line);
+    border-radius: 999px; background: var(--surface); color: var(--ink); cursor: pointer; }
+  .date-input:focus { outline: none; border-color: var(--ink-2); }
+  .custom-range .dash { color: var(--ink-2); font-size: 12px; }
+  .custom-apply { cursor: pointer; background: var(--ink); color: var(--bg); border: 1px solid var(--ink); }
+  .custom-apply:hover { opacity: .85; }
   .pill.status { font-size: 11px; padding: 4px 10px; }
   .pill.status .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
   .pill.status.live .dot { background: var(--good); animation: pulse 2s infinite; }
@@ -449,11 +450,8 @@
 
 <header class="topbar">
   <div class="brand">
-    <div class="brand-mark">F</div>
-    <div>
-      <div class="brand-name">Fitasy</div>
-      <div class="brand-sub">Brand Performance</div>
-    </div>
+    <img class="brand-logo" src="https://fitasy.com/cdn/shop/files/black_logo.png?v=1768815725&width=600" alt="Fitasy">
+    <div class="brand-sub">Brand Performance</div>
   </div>
   <div class="filters">
     <span class="pill status" id="status-pill"><span class="dot"></span><span class="status-text">Loading data…</span></span>
@@ -461,6 +459,15 @@
       <button class="pill period-pill" data-period="7">7 Days</button>
       <button class="pill period-pill active" data-period="30">30 Days</button>
       <button class="pill period-pill" data-period="90">90 Days</button>
+      <button class="pill period-pill" data-quick="thismonth">This Month</button>
+      <button class="pill period-pill" data-quick="lastmonth">Last Month</button>
+      <button class="pill period-pill" id="custom-toggle">Custom ▾</button>
+    </span>
+    <span class="custom-range" id="custom-range" hidden>
+      <input type="date" id="custom-start" class="date-input" aria-label="Start date">
+      <span class="dash">→</span>
+      <input type="date" id="custom-end" class="date-input" aria-label="End date">
+      <button class="pill custom-apply" id="custom-apply">Apply</button>
     </span>
     <a class="pill" href="https://datastudio.google.com/u/1/reporting/272fecc3-e1a5-47bb-8e1a-b973be08bcd4" target="_blank">Open in Looker Studio ↗</a>
   </div>
@@ -507,6 +514,8 @@
       <div class="kpi" data-kpi="roas"><span class="source-tag google">Google</span><div class="label">ROAS</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
       <div class="kpi" data-kpi="cost_per_order"><span class="source-tag google">Google</span><div class="label">Cost / order</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
       <div class="kpi" data-kpi="avg_cpc"><span class="source-tag google">Google</span><div class="label">Avg. CPC</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
+      <div class="kpi" data-kpi="google_cpm"><span class="source-tag google">Google</span><div class="label">Google CPM</div><div class="value">—</div><div class="meta"><span class="meta-text">cost per 1,000 impressions</span></div></div>
+      <div class="kpi" data-kpi="blended_cpm"><span class="source-tag brand">Blended</span><div class="label">Blended CPM</div><div class="value">—</div><div class="meta"><span class="meta-text">Google + Meta</span></div></div>
 
       <div class="kpi-group-label">Paid Meta · Meta Marketing API</div>
       <div class="kpi" data-kpi="meta_spend"><span class="source-tag meta">Meta</span><div class="label">Spend</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">vs prior 30d</span></div></div>
@@ -528,6 +537,12 @@
       <div class="kpi" data-kpi="meta_reach"><span class="source-tag meta">Meta</span><div class="label">Reach</div><div class="value">—</div><div class="meta"><span class="meta-text">unique people</span></div></div>
       <div class="kpi" data-kpi="meta_frequency"><span class="source-tag meta">Meta</span><div class="label">Frequency</div><div class="value">—</div><div class="meta"><span class="meta-text">avg impressions / person</span></div></div>
       <div class="kpi" data-kpi="meta_cpm"><span class="source-tag meta">Meta</span><div class="label">CPM</div><div class="value">—</div><div class="meta"><span class="meta-text">cost per 1,000 impressions</span></div></div>
+
+      <div class="kpi-group-label">Social Following · Meta Graph API</div>
+      <div class="kpi" data-kpi="followers_total"><span class="source-tag meta">Meta</span><div class="label">Followers</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">net last 30d</span></div></div>
+      <div class="kpi" data-kpi="followers_ig"><span class="source-tag meta">Instagram</span><div class="label">Instagram</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">net last 30d</span></div></div>
+      <div class="kpi" data-kpi="followers_fb"><span class="source-tag meta">Facebook</span><div class="label">Facebook Page</div><div class="value">—</div><div class="meta"><span class="delta flat">—</span><span class="meta-text">net last 30d</span></div></div>
+      <div class="kpi" data-kpi="cpf"><span class="source-tag meta">Meta</span><div class="label">Cost / follower</div><div class="value">—</div><div class="meta"><span class="meta-text">Meta spend / new followers</span></div></div>
     </div>
   </section>
 
@@ -535,7 +550,7 @@
   <section class="section" id="organic-paid">
     <div class="section-head">
       <h2>Organic vs Paid</h2>
-      <div class="meta">Last 30 Days · GA4 Session medium grouping</div>
+      <div class="meta">Last 30 Days · GA4 source+medium · Meta referrals counted as paid</div>
     </div>
 
     <div class="ovp-grid">
@@ -864,7 +879,17 @@
 <script>
   // ============== CONFIG ==============
   const SHEET_ID = '1IXx602iT322QYoA7fEd4BzRrBBsCDxD9MEmeecJxnME'; // FitasyDashboard sheet (Kevin)
+  // Apps Script web app /exec URL — powers custom date ranges (live GA4/Meta query).
+  // Deploy the Apps Script as a Web App and paste the URL here. See WEBAPP_SETUP.md.
+  const WEBAPP_URL = 'PASTE_WEB_APP_EXEC_URL_HERE';
+
   let CURRENT_PERIOD = 30;  // changes via period pills; tabs with _Nd suffix are picked dynamically
+
+  // Custom-range state. When CUSTOM_MODE is true, period-dependent data comes live
+  // from the web app for CUSTOM_DATES instead of the pre-computed _Nd sheet tabs.
+  let CUSTOM_MODE = false;
+  let CUSTOM_DATES = { start: null, end: null };  // 'YYYY-MM-DD'
+  let CUSTOM_LABEL = '';                          // human label e.g. "This Month" or "Apr 1 – Apr 30"
 
   // Period-suffixed tabs (rebuilt per period) vs period-agnostic tabs (fetched once)
   function PERIODED_TABS() {
@@ -1324,22 +1349,29 @@
     return String(str ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
-  // Replace "Last N Days" / "Last N days" in all section meta labels with the active period
+  // The active-period label: "Last N Days" for presets, the custom label otherwise.
+  function periodLabelText() {
+    return CUSTOM_MODE ? CUSTOM_LABEL : `Last ${CURRENT_PERIOD} Days`;
+  }
+
+  // Swap the period phrase in section meta labels. Each element's original text is
+  // cached once in data-tpl so switching periods (incl. back from custom) always works.
   function updatePeriodLabels() {
-    const re = /Last\s+\d+\s+(Days?|days?)/g;
+    const re = /Last\s+\d+\s+Days?/gi;
     document.querySelectorAll('.section-head .meta, .ovp-chart-wrap .chart-title').forEach(el => {
-      el.textContent = el.textContent.replace(re, `Last ${CURRENT_PERIOD} Days`);
+      if (el.dataset.tpl === undefined) el.dataset.tpl = el.textContent;
+      el.textContent = el.dataset.tpl.replace(re, periodLabelText());
     });
   }
 
   function applyConfig(rows) {
-    if (!rows) return;
     const map = {};
-    rows.forEach(r => { if (r.key) map[r.key] = r.value; });
+    (rows || []).forEach(r => { if (r.key) map[r.key] = r.value; });
     const subEl = document.querySelector('[data-banner="sub"]');
     if (subEl) {
+      const period = CUSTOM_MODE ? CUSTOM_LABEL : `Last ${CURRENT_PERIOD} days`;
       const syncedPart = map.synced ? ` · synced ${map.synced}` : '';
-      subEl.textContent = `Last ${CURRENT_PERIOD} days${syncedPart} · GA4 + Google Ads + Shopify + Klaviyo`;
+      subEl.textContent = `${period}${syncedPart} · GA4 + Google Ads + Shopify + Klaviyo`;
     }
   }
 
@@ -1348,63 +1380,101 @@
     Object.values(charts).forEach(c => { if (c && c.destroy) c.destroy(); });
   }
 
+  // ============== PERIOD-DEPENDENT DATA BUNDLES ==============
+  // Both return the same set of named datasets so init() renders them identically.
+
+  // Presets: read the pre-computed _Nd tabs from the sheet (instant).
+  async function fetchPresetBundle() {
+    const T = PERIODED_TABS();
+    const keys = ['kpis','ovpSummary','ovpChannels','channels','trend','pillars','products',
+                  'pages','demoAge','demoGender','geoCountry','geoRegion','metaKpis','funnel','quality'];
+    const results = await Promise.all(keys.map(k => fetchTab(T[k])));
+    const bundle = {};
+    keys.forEach((k, i) => { bundle[k] = results[i]; });
+    bundle.campaigns = null; // preset mode uses the static Campaigns tab
+    return bundle;
+  }
+
+  // Custom range: one live call to the Apps Script web app, which queries GA4/Meta/Ads
+  // for the exact range and returns JSON already shaped like parsed sheet rows.
+  async function fetchCustomBundle() {
+    if (!WEBAPP_URL || WEBAPP_URL.indexOf('PASTE') !== -1) {
+      throw new Error('web app URL not configured (see WEBAPP_SETUP.md)');
+    }
+    const url = `${WEBAPP_URL}?start=${encodeURIComponent(CUSTOM_DATES.start)}&end=${encodeURIComponent(CUSTOM_DATES.end)}`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const json = await resp.json();
+    if (!json.ok) throw new Error(json.error || 'web app returned an error');
+    const d = json.data || {};
+    return {
+      kpis: d.KPIs, ovpSummary: d.OvpSummary, ovpChannels: d.OvpChannels, channels: d.ChannelMix,
+      trend: d.Trend, pillars: d.Pillars, products: d.Products, pages: d.TopPages,
+      demoAge: d.DemoAge, demoGender: d.DemoGender, geoCountry: d.GeoCountry, geoRegion: d.GeoRegion,
+      metaKpis: d.MetaKpis, funnel: d.Funnel, quality: d.Quality, campaigns: d.Campaigns
+    };
+  }
+
   // ============== MAIN ==============
   async function init() {
-    setStatus('stale', `Fetching ${CURRENT_PERIOD}-day data…`);
-    const T = PERIODED_TABS();
+    setStatus('stale', CUSTOM_MODE ? `Fetching ${CUSTOM_LABEL}… (live query, ~20–40s)` : `Fetching ${CURRENT_PERIOD}-day data…`);
 
-    const [config, kpis, ovpSummary, ovpChannels, channels, campaigns, trend, pillars, products, pages, sentiment, mentions, email, demoAge, demoGender, geoCountry, geoRegion, metaKpis, creatives, funnel, quality] = await Promise.all([
+    // Static (period-agnostic) tabs always come from the sheet.
+    const staticPromise = Promise.all([
       fetchTab(STATIC_TABS.config),
-      fetchTab(T.kpis),
-      fetchTab(T.ovpSummary),
-      fetchTab(T.ovpChannels),
-      fetchTab(T.channels),
-      fetchTab(STATIC_TABS.campaigns),
-      fetchTab(T.trend),
-      fetchTab(T.pillars),
-      fetchTab(T.products),
-      fetchTab(T.pages),
       fetchTab(STATIC_TABS.sentiment),
       fetchTab(STATIC_TABS.mentions),
       fetchTab(STATIC_TABS.email),
-      fetchTab(T.demoAge),
-      fetchTab(T.demoGender),
-      fetchTab(T.geoCountry),
-      fetchTab(T.geoRegion),
-      fetchTab(T.metaKpis),
       fetchTab(STATIC_TABS.creatives),
-      fetchTab(T.funnel),
-      fetchTab(T.quality)
+      fetchTab(STATIC_TABS.campaigns)
     ]);
+
+    // Period-dependent datasets: live web app for custom, pre-computed tabs for presets.
+    let P = {}, periodError = null;
+    try {
+      P = CUSTOM_MODE ? await fetchCustomBundle() : await fetchPresetBundle();
+    } catch (e) {
+      periodError = e;
+    }
+
+    const [config, sentiment, mentions, email, creatives, campaignsStatic] = await staticPromise;
+
+    // If the period fetch failed, leave the currently-displayed data in place
+    // rather than blanking every section to "—".
+    if (periodError) {
+      setStatus('error', (CUSTOM_MODE ? 'Custom range failed — ' : 'Load failed — ') + (periodError.message || periodError));
+      return;
+    }
+    const campaigns = CUSTOM_MODE ? P.campaigns : campaignsStatic;
 
     updatePeriodLabels();
     applyConfig(config);
-    populateKPIs([...(kpis || []), ...(email || []), ...(metaKpis || []), ...(quality || [])]);
-    populateOvpSummary(ovpSummary);
-    populateOvpChannels(ovpChannels);
-    populateChannelsTable(channels);
+    populateKPIs([...(P.kpis || []), ...(email || []), ...(P.metaKpis || []), ...(P.quality || [])]);
+    populateOvpSummary(P.ovpSummary);
+    populateOvpChannels(P.ovpChannels);
+    populateChannelsTable(P.channels);
     populateCampaigns(campaigns);
-    populatePillars(pillars);
-    populateProducts(products);
-    populatePages(pages);
-    populateDemoAge(demoAge);
-    populateDemoGender(demoGender);
-    populateGeoCountry(geoCountry);
-    populateGeoRegion(geoRegion);
-    populateFunnel(funnel);
+    populatePillars(P.pillars);
+    populateProducts(P.products);
+    populatePages(P.pages);
+    populateDemoAge(P.demoAge);
+    populateDemoGender(P.demoGender);
+    populateGeoCountry(P.geoCountry);
+    populateGeoRegion(P.geoRegion);
+    populateFunnel(P.funnel);
     populateCreatives(creatives);
     populateMentions(mentions);
 
     destroyCharts();
-    initOvpChart(trend);
-    initCostRevChart(trend);
-    initChannelsChart(channels);
+    initOvpChart(P.trend);
+    initCostRevChart(P.trend);
+    initChannelsChart(P.channels);
     initSentimentChart(sentiment);
 
     // Status indicator
-    const fetched = [kpis, ovpSummary, channels, trend].filter(t => t && t.length > 0).length;
-    if (SHEET_ID === 'PASTE_YOUR_SHEET_ID_HERE') {
-      setStatus('stale', 'Demo data — sheet ID not configured');
+    const fetched = [P.kpis, P.ovpSummary, P.channels, P.trend].filter(t => t && t.length > 0).length;
+    if (CUSTOM_MODE) {
+      setStatus(fetched ? 'live' : 'error', fetched ? `Live · ${CUSTOM_LABEL}` : 'No data for the selected range');
     } else if (fetched === 0) {
       setStatus('error', `No ${CURRENT_PERIOD}d tabs found — run pullAll() in Apps Script`);
     } else if (fetched < 4) {
@@ -1414,20 +1484,86 @@
     }
   }
 
-  // Period pill click handler
+  // ============== PERIOD CONTROLS ==============
+  function setActivePill(btn) {
+    document.querySelectorAll('.period-pill').forEach(b => b.classList.toggle('active', b === btn));
+  }
+  function ymd(d) {
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+  }
+  function prettyRange(s, e) {
+    const opts = { month: 'short', day: 'numeric' };
+    const sd = new Date(s + 'T00:00:00'), ed = new Date(e + 'T00:00:00');
+    return sd.toLocaleDateString('en-US', opts) + ' – ' + ed.toLocaleDateString('en-US', opts);
+  }
+  // "This Month" = 1st → today; "Last Month" = full previous calendar month.
+  function monthRange(which) {
+    const now = new Date();
+    let y = now.getUTCFullYear(), m = now.getUTCMonth();
+    if (which === 'lastmonth') { m -= 1; if (m < 0) { m = 11; y -= 1; } }
+    const start = new Date(Date.UTC(y, m, 1));
+    const end = (which === 'lastmonth') ? new Date(Date.UTC(y, m + 1, 0))
+                                        : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    return { start: ymd(start), end: ymd(end) };
+  }
+
   function bindPeriodPills() {
-    document.querySelectorAll('.period-pill').forEach(btn => {
+    const customRangeBox = document.getElementById('custom-range');
+    const customToggle = document.getElementById('custom-toggle');
+
+    // Fixed presets (instant, pre-computed tabs)
+    document.querySelectorAll('.period-pill[data-period]').forEach(btn => {
       btn.addEventListener('click', () => {
-        const newPeriod = parseInt(btn.dataset.period, 10);
-        if (newPeriod === CURRENT_PERIOD) return;
-        CURRENT_PERIOD = newPeriod;
-        document.querySelectorAll('.period-pill').forEach(b => b.classList.toggle('active', b === btn));
+        const p = parseInt(btn.dataset.period, 10);
+        if (!CUSTOM_MODE && p === CURRENT_PERIOD) return;
+        CUSTOM_MODE = false;
+        CURRENT_PERIOD = p;
+        customRangeBox.hidden = true;
+        customToggle.textContent = 'Custom ▾';
+        setActivePill(btn);
         init();
       });
+    });
+
+    // Quick month ranges (live query)
+    document.querySelectorAll('.period-pill[data-quick]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const r = monthRange(btn.dataset.quick);
+        CUSTOM_MODE = true;
+        CUSTOM_DATES = r;
+        CUSTOM_LABEL = btn.textContent.trim();
+        customRangeBox.hidden = true;
+        customToggle.textContent = 'Custom ▾';
+        document.getElementById('custom-start').value = r.start;
+        document.getElementById('custom-end').value = r.end;
+        setActivePill(btn);
+        init();
+      });
+    });
+
+    // Custom date picker
+    customToggle.addEventListener('click', () => { customRangeBox.hidden = !customRangeBox.hidden; });
+    document.getElementById('custom-apply').addEventListener('click', () => {
+      const s = document.getElementById('custom-start').value;
+      const e = document.getElementById('custom-end').value;
+      if (!s || !e) { setStatus('error', 'Pick both a start and end date'); return; }
+      if (s > e) { setStatus('error', 'Start date must be on or before end date'); return; }
+      CUSTOM_MODE = true;
+      CUSTOM_DATES = { start: s, end: e };
+      CUSTOM_LABEL = prettyRange(s, e);
+      customToggle.textContent = `Custom: ${CUSTOM_LABEL} ▾`;
+      customRangeBox.hidden = true;
+      setActivePill(customToggle);
+      init();
     });
   }
 
   document.addEventListener('DOMContentLoaded', () => {
+    // Seed the custom date inputs with a sensible default (last 30 days).
+    const today = new Date();
+    const ago = new Date(today.getTime() - 30 * 86400000);
+    document.getElementById('custom-end').value = ymd(new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())));
+    document.getElementById('custom-start').value = ymd(new Date(Date.UTC(ago.getFullYear(), ago.getMonth(), ago.getDate())));
     bindPeriodPills();
     init();
   });

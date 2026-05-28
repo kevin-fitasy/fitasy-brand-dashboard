@@ -97,17 +97,32 @@ While you're here: also **Assign assets → Apps →** select the `Fitasy Dashbo
 4. **Assign permissions:** the permissions list should now populate (it was empty before because of the missing Step 3). Check:
    - ✅ `ads_read`
    - ✅ `business_management`
+   - ✅ `pages_read_engagement` ← needed for FB Page follower count + growth
+   - ✅ `pages_show_list`         ← needed to read the Page asset
+   - ✅ `instagram_basic`         ← needed for the IG account + follower count
+   - ✅ `instagram_manage_insights` ← needed for IG follower growth over a date range
    - Leave everything else unchecked (least-privilege)
 5. **Generate Token**
 6. **Copy the token immediately** — Meta shows it exactly once. It's a long string starting with `EAA...`
 
 ---
 
-## Step 6 — Get the Ad Account ID
+## Step 6 — Get the Ad Account ID and Page ID
 
 1. business.facebook.com → Business Settings → Accounts → **Ad accounts**
 2. Click the Fitasy ad account → copy the numeric **Account ID** (e.g. `123456789012345`)
 3. The script needs it prefixed: `act_123456789012345`
+4. Then Business Settings → Accounts → **Pages** → click the Fitasy Facebook Page → copy the numeric **Page ID** (e.g. `987654321098765`). No prefix.
+
+## Step 6b — Assign the Page to the System User
+
+Just like Step 4 did for the ad account, the system user needs explicit access to the Page asset:
+
+1. Business Settings → Users → **System users** → select the system user
+2. **Assign assets** → **Pages** → tick the Fitasy Page → enable **View performance**
+3. Save
+
+If the Instagram account is **linked to that Page** (the normal setup for a business IG account), no separate step is needed — the IG follower endpoints will work through the Page permissions. If IG is unlinked, link it: business.facebook.com → Business Settings → Accounts → **Instagram accounts** → connect Fitasy's IG → assign it to the same Page.
 
 ---
 
@@ -115,11 +130,12 @@ While you're here: also **Assign assets → Apps →** select the `Fitasy Dashbo
 
 **Do NOT send the token over plain Slack/email.** Use a password manager share (1Password, Bitwarden), or paste it directly into the destination yourself (Step 8) if Kevin gives you temporary access to the Apps Script project.
 
-You need to deliver two values:
+You need to deliver three values:
 | Key | Value |
 |---|---|
 | `META_TOKEN` | the `EAA...` string from Step 5 |
 | `META_AD_ACCOUNT_ID` | `act_` + the number from Step 6 |
+| `META_FB_PAGE_ID` | the digits-only Page ID from Step 6 (no prefix) |
 
 ---
 
@@ -130,6 +146,7 @@ You need to deliver two values:
 3. Scroll to **Script properties** → **Edit script properties** → **Add script property**:
    - Property: `META_TOKEN` — Value: the token
    - Property: `META_AD_ACCOUNT_ID` — Value: `act_...`
+   - Property: `META_FB_PAGE_ID` — Value: the Page ID (digits only)
 4. **Save**
 5. In the editor, function dropdown → `pullAll` → ▶ **Run**
 6. Check the execution log for:

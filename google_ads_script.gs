@@ -1,4 +1,10 @@
 /**
+ * ⚠️ OBSOLETE — DO NOT USE.
+ * The Fitasy Google Ads account does not have the in-account "Scripts" feature
+ * (Tools menu shows only Conversions + Measurement). Google Ads data is now pulled
+ * via the Google Ads API inside apps_script_dashboard_filler.gs (pullGoogleAdsCampaigns).
+ * See GOOGLE_ADS_SETUP.md. This file is kept only for reference.
+ *
  * FITASY DASHBOARD — GOOGLE ADS SCRIPT (separate from Apps Script)
  *
  * This runs *inside Google Ads* (not Apps Script) — Tools & Settings → Bulk actions → Scripts.
