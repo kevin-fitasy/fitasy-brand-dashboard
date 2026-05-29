@@ -253,19 +253,18 @@ function pullGA4OvpSummary(days) {
 }
 
 // Single source of truth for "is this GA4 session paid?". Looks at both source and medium.
-// - Properly UTM-tagged paid traffic (medium = cpc / ppc / paid_*) → paid.
-// - Meta ad clicks usually arrive un-UTM'd as `referral` from facebook/instagram domains.
-//   GA4 has no way to know they're paid. At Fitasy's stage, organic Facebook/Instagram
-//   referrals are negligible, so we treat referrals from those domains as Paid Social.
-//   If organic social starts driving meaningful traffic, narrow this list.
-// The proper fix is UTMs on Meta ad URLs (utm_medium=paid_social); this is the band-aid
-// until those land. Pass medium only (old call sites) and it still works.
+// Handles real-world UTM messiness: capitalisation, spaces, hyphens, underscores. A
+// medium like "Paid Social", "paid_social", "paid-social", "PaidSocial" all classify as paid.
+// Also: un-UTM'd Meta ad clicks arrive as `referral` from facebook/instagram domains —
+// we treat those as Paid Social too (Fitasy isn't running organic social at scale).
 function isPaidTraffic(source, medium) {
   const m = String(medium || '').toLowerCase().trim();
-  if (m === 'cpc' || m === 'ppc' || m === 'paid' ||
-      m === 'paid_social' || m === 'paidsocial' ||
-      m === 'paid_search' || m === 'paidsearch' ||
-      m.indexOf('paid_') === 0) return true;
+  // Normalise separators so "paid social" / "paid_social" / "paid-social" / "paidsocial" all match.
+  const mNorm = m.replace(/[\s\-]+/g, '_');
+  if (mNorm === 'cpc' || mNorm === 'ppc' || mNorm === 'paid' ||
+      mNorm === 'paidsocial' || mNorm === 'paidsearch' ||
+      mNorm === 'paidvideo' || mNorm === 'paidshopping' ||
+      mNorm.indexOf('paid_') === 0) return true;
 
   const s = String(source || '').toLowerCase().trim();
   const PAID_SOCIAL_DOMAINS = new Set([
@@ -1302,4 +1301,54 @@ function priorRangeOf(start, end) {
 function testCustomReport() {
   const r = buildCustomReport('2026-04-01', '2026-04-30');
   console.log('Captured tabs: ' + Object.keys(r).join(', '));
+}
+
+// ============================ DIAGNOSTIC: traffic-source classification ============================
+//
+// Dumps every (source, medium) combination GA4 returns for the last N days, with sessions,
+// transactions, revenue, AND how the current isPaidTraffic() classifier labels each one.
+// Use this to spot Meta/Google/other paid traffic that's slipping into the Organic bucket.
+//
+// HOW TO RUN: in the Apps Script editor, select `dumpTrafficClassification` from the
+// function dropdown → ▶ Run. Output lands in the `TrafficDebug` tab of the dashboard sheet.
+// Optional: pass a different lookback by editing the call below, e.g. `dumpTrafficClassification(7)`.
+
+function dumpTrafficClassification(days) {
+  const lookback = days || 30;
+  const rep = ga4RunReport({
+    dimensions: ['sessionSource', 'sessionMedium'],
+    metrics: ['sessions', 'purchaseRevenue', 'ecommercePurchases'],
+    daysBack: lookback,
+    orderBy: { metric: { metricName: 'sessions' }, desc: true },
+    limit: 200
+  });
+
+  const rows = rep.rows.map(r => {
+    const source = r.dimensions[0];
+    const medium = r.dimensions[1];
+    const sess   = Number(r.metrics[0]);
+    const rev    = Number(r.metrics[1]);
+    const tx     = Number(r.metrics[2]);
+    return [source, medium, sess, tx, rev, isPaidTraffic(source, medium) ? 'Paid' : 'Organic'];
+  });
+
+  // Save the original behavior of writeTabReplace (sheet write, not capture).
+  const wasCapturing = CAPTURE;
+  CAPTURE = null;
+  writeTabReplace('TrafficDebug',
+    ['source', 'medium', 'sessions', 'transactions', 'revenue', 'classified_as'],
+    rows);
+  CAPTURE = wasCapturing;
+
+  // Quick totals to the log so you can sanity-check without opening the tab.
+  let paidSess = 0, orgSess = 0, paidRev = 0, orgRev = 0;
+  rows.forEach(r => {
+    if (r[5] === 'Paid') { paidSess += r[2]; paidRev += r[4]; }
+    else                  { orgSess += r[2]; orgRev += r[4]; }
+  });
+  console.log(`TrafficDebug (${lookback}d): ` +
+    `Paid = ${paidSess} sessions / $${paidRev.toFixed(0)} · ` +
+    `Organic = ${orgSess} sessions / $${orgRev.toFixed(0)} · ` +
+    `total = ${paidSess + orgSess} sessions / $${(paidRev + orgRev).toFixed(0)} · ` +
+    `${rows.length} unique source/medium combos`);
 }
