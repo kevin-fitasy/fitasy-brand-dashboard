@@ -43,6 +43,21 @@ var GOOGLE_ADS_KPI = null;
 // Stays null if Meta isn't configured.
 var META_KPI = null;
 
+// Display currency for all money values across the dashboard. Auto-detected from the
+// Meta ad account in pullMeta() (Meta returns the account's denominated currency); if
+// Meta isn't configured, falls back to USD. Overridable via Script Property CURRENCY_CODE.
+var CURRENCY = { code: 'USD', symbol: '$' };
+const CURRENCY_SYMBOLS = {
+  USD: '$', EUR: '€', GBP: '£', CAD: 'CA$', AUD: 'A$', NZD: 'NZ$',
+  JPY: '¥', CNY: '¥', INR: '₹', BRL: 'R$', MXN: 'MX$', ZAR: 'R',
+  CHF: 'CHF ', SEK: 'kr ', NOK: 'kr ', DKK: 'kr ', PLN: 'zł ',
+  HKD: 'HK$', SGD: 'S$', THB: '฿', TRY: '₺', ILS: '₪', KRW: '₩'
+};
+function setCurrency(code) {
+  const c = String(code || '').toUpperCase().trim();
+  if (CURRENCY_SYMBOLS[c]) CURRENCY = { code: c, symbol: CURRENCY_SYMBOLS[c] };
+}
+
 // ---- Custom date-range mode (used by the doGet web app for the dashboard's custom picker) ----
 // When CUSTOM_RANGE is set, every pull function computes against an explicit start/end
 // instead of "N days ago", and tabName() drops the _Nd suffix.
@@ -147,15 +162,15 @@ function pullGA4Kpis(days) {
   // Google Ads rows — filled from GOOGLE_ADS_KPI when the connector is configured.
   const g = GOOGLE_ADS_KPI;
   const gMeta = g ? '30d Google Ads' : 'pending Google Ads pull';
-  const avgCpc       = (g && g.clicks > 0) ? '$' + (g.cost / g.clicks).toFixed(2) : '—';
+  const avgCpc       = (g && g.clicks > 0) ? CURRENCY.symbol + (g.cost / g.clicks).toFixed(2) : '—';
   const googleCost   = g ? fmtMoney(g.cost) : '—';
   const googleRoas   = (g && g.cost > 0) ? (g.revenue / g.cost).toFixed(2) : '—';
-  const googleCpm    = (g && g.impressions > 0) ? '$' + (g.cost / (g.impressions / 1000)).toFixed(2) : '—';
+  const googleCpm    = (g && g.impressions > 0) ? CURRENCY.symbol + (g.cost / (g.impressions / 1000)).toFixed(2) : '—';
 
   // Blended CPM = (Google + Meta cost) / (Google + Meta impressions / 1000)
   const blendedSpend = (g && g.cost ? g.cost : 0) + (META_KPI && META_KPI.spend ? META_KPI.spend : 0);
   const blendedImps  = (g && g.impressions ? g.impressions : 0) + (META_KPI && META_KPI.impressions ? META_KPI.impressions : 0);
-  const blendedCpm   = blendedImps > 0 ? '$' + (blendedSpend / (blendedImps / 1000)).toFixed(2) : '—';
+  const blendedCpm   = blendedImps > 0 ? CURRENCY.symbol + (blendedSpend / (blendedImps / 1000)).toFixed(2) : '—';
   const blendedCpmMetaParts = [];
   if (g && g.cost > 0)               blendedCpmMetaParts.push('Google');
   if (META_KPI && META_KPI.spend > 0) blendedCpmMetaParts.push('Meta');
@@ -183,7 +198,7 @@ function pullGA4Kpis(days) {
     ['purchase_revenue', 'Purchase revenue', fmtMoney(c.purchaseRevenue), deltaPct(c.purchaseRevenue, p.purchaseRevenue), vsPrior, '', ''],
     ['transactions',     'Transactions',     fmtNum(c.ecommercePurchases),deltaPct(c.ecommercePurchases, p.ecommercePurchases), vsPrior, '', ''],
     ['aov',              'AOV',              fmtMoney(c.averagePurchaseRevenue),
-      deltaAbs(c.averagePurchaseRevenue, p.averagePurchaseRevenue, '$'), vsPrior, '', ''],
+      deltaAbs(c.averagePurchaseRevenue, p.averagePurchaseRevenue, CURRENCY.symbol), vsPrior, '', ''],
     ['cost_per_order',   'Cost / order',     costPerOrder, '', cpoMeta, '', ''],
     ['avg_cpc',          'Avg. CPC',         avgCpc,       '', gMeta, '', ''],
     ['google_cost',      'Google Ads cost',  googleCost,   '', gMeta, '', ''],
@@ -644,6 +659,23 @@ function pullMeta(days) {
   const until = CUSTOM_RANGE ? CUSTOM_RANGE.endDate
     : Utilities.formatDate(new Date(), 'UTC', 'yyyy-MM-dd');
 
+  // --- Detect the ad account's denominated currency (so fmtMoney shows the right
+  //     symbol — Meta returns spend in account currency, not always USD). ---
+  const override = PropertiesService.getScriptProperties().getProperty('CURRENCY_CODE');
+  if (override) {
+    setCurrency(override);
+  } else {
+    try {
+      const accUrl = `https://graph.facebook.com/v19.0/${accountId}?fields=currency&access_token=${encodeURIComponent(token)}`;
+      const r = UrlFetchApp.fetch(accUrl, { muteHttpExceptions: true });
+      const j = JSON.parse(r.getContentText());
+      if (j.currency) {
+        setCurrency(j.currency);
+        console.log(`pullMeta(${days}): account currency = ${j.currency} (${CURRENCY.symbol})`);
+      }
+    } catch (e) { console.warn('Meta account currency fetch failed:', e); }
+  }
+
   // --- Ad performance ---
   const timeRange = encodeURIComponent(JSON.stringify({ since: since, until: until }));
   const url = `https://graph.facebook.com/v19.0/${accountId}/insights?fields=spend,impressions,clicks,ctr,cpm,reach,frequency,purchase_roas,actions&time_range=${timeRange}&access_token=${encodeURIComponent(token)}`;
@@ -666,7 +698,7 @@ function pullMeta(days) {
     ['meta_purchases',   'Meta Purchases',   fmtNum(purchases),       '', '', `${days}d Meta Ads`, '', ''],
     ['meta_ctr',         'Meta CTR',         ctr.toFixed(2) + '%',    '', '', `${days}d Meta Ads`, '', ''],
     ['meta_impressions', 'Meta Impressions', fmtNum(impressions),     '', '', `${days}d Meta Ads`, '', ''],
-    ['meta_cpm',         'Meta CPM',         '$' + cpm.toFixed(2),    '', '', 'cost per 1k impr.', '', ''],
+    ['meta_cpm',         'Meta CPM',         CURRENCY.symbol + cpm.toFixed(2), '', '', 'cost per 1k impr.', '', ''],
     ['meta_reach',       'Meta Reach',       fmtNum(reach),           '', '', 'unique people',     '', ''],
     ['meta_frequency',   'Meta Frequency',   frequency.toFixed(2),    '', '', 'avg impr. / person','', '']
   ];
@@ -1111,7 +1143,7 @@ function ga4RunReport(opts) {
 
 function isFiniteNum(n) { return typeof n === 'number' && isFinite(n); }
 function fmtNum(n)   { return isFiniteNum(Number(n)) ? Math.round(Number(n)).toLocaleString('en-US') : '—'; }
-function fmtMoney(n) { return isFiniteNum(Number(n)) ? '$' + Math.round(Number(n)).toLocaleString('en-US') : '—'; }
+function fmtMoney(n) { return isFiniteNum(Number(n)) ? CURRENCY.symbol + Math.round(Number(n)).toLocaleString('en-US') : '—'; }
 function deltaPct(cur, prev) {
   if (!prev || prev === 0) return { value: '—', dir: 'flat' };
   const pct = (cur - prev) / prev * 100;
