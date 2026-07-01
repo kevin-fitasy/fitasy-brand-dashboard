@@ -43,6 +43,12 @@ var GOOGLE_ADS_KPI = null;
 // Stays null if Meta isn't configured.
 var META_KPI = null;
 
+// Populated by pullShopify(). Shopify is the ground truth for total orders + revenue —
+// GA4's ecommerce pixel routinely undercounts by 50-75% (ad-blockers, consent refusals,
+// iOS ITP, Shopify SPA quirks). We use Shopify for totals and prefer platform-attributed
+// counts for paid buckets. Stays null if Shopify isn't configured.
+var SHOPIFY_KPI = null;
+
 // Display currency for all money values across the dashboard. Auto-detected from the
 // Meta ad account in pullMeta() (Meta returns the account's denominated currency); if
 // Meta isn't configured, falls back to USD. Overridable via Script Property CURRENCY_CODE.
@@ -82,7 +88,8 @@ function pullAll() {
   // GA4-derived tabs are duplicated per period (7d, 30d, 90d) so the dashboard can switch instantly
   PERIODS.forEach(days => {
     console.log(`--- Period: ${days} days ---`);
-    // Meta first so META_KPI is set before pullGA4Kpis builds the blended cost/order row.
+    // Shopify + Meta first so their globals are set before pullGA4Kpis / OvpSummary read them.
+    try { pullShopify(days); }         catch (e) { console.error(`pullShopify(${days}):`, e); }
     try { pullMeta(days); }            catch (e) { console.error(`pullMeta(${days}):`, e); }
     try { pullGA4Kpis(days); }         catch (e) { console.error(`pullGA4Kpis(${days}):`, e); }
     try { pullGA4OvpSummary(days); }   catch (e) { console.error(`pullGA4OvpSummary(${days}):`, e); }
@@ -159,6 +166,21 @@ function pullGA4Kpis(days) {
   const p = prev.totals;
   const vsPrior = `vs prior ${days}d`;
 
+  // Prefer Shopify for transactions/revenue when configured — GA4's Shopify pixel
+  // undercounts by 50-75% due to ad-blockers, consent refusals, iOS ITP.
+  const shopTx  = SHOPIFY_KPI ? SHOPIFY_KPI.orders  : null;
+  const shopRev = SHOPIFY_KPI ? SHOPIFY_KPI.revenue : null;
+  const txDisplay  = (shopTx  != null) ? shopTx  : c.ecommercePurchases;
+  const revDisplay = (shopRev != null) ? shopRev : c.purchaseRevenue;
+  const aovDisplay = (txDisplay > 0) ? revDisplay / txDisplay : 0;
+  const txMeta  = (shopTx  != null) ? 'Shopify · ' + vsPrior : vsPrior;
+  const revMeta = (shopRev != null) ? 'Shopify · ' + vsPrior : vsPrior;
+  // Purchase rate: use Shopify orders / GA4 sessions when possible (the higher-fidelity ratio).
+  const prDisplay = (c.sessions > 0)
+    ? ((shopTx != null ? shopTx : c.ecommercePurchases) / c.sessions * 100)
+    : 0;
+  const prMeta = (shopTx != null) ? 'Shopify orders / GA4 sessions' : 'transactions / sessions';
+
   // Google Ads rows — filled from GOOGLE_ADS_KPI when the connector is configured.
   const g = GOOGLE_ADS_KPI;
   const gMeta = g ? '30d Google Ads' : 'pending Google Ads pull';
@@ -176,37 +198,35 @@ function pullGA4Kpis(days) {
   if (META_KPI && META_KPI.spend > 0) blendedCpmMetaParts.push('Meta');
   const blendedCpmMeta = blendedCpmMetaParts.length ? `${blendedCpmMetaParts.join(' + ')} blended` : 'pending ad data';
 
-  // Blended cost / order = (Google + Meta ad spend) / GA4 transactions.
-  // GA4 transactions is the ground-truth order count (one purchase = one order, no
-  // double-counting like ad-platform-attributed conversions can do). When neither ad
-  // connector is configured this still shows "—".
+  // Blended cost / order = (Google + Meta ad spend) / total orders. Uses Shopify's
+  // order count when configured (ground truth); falls back to GA4 transactions.
   const adSpend = (g && g.cost ? g.cost : 0) + (META_KPI && META_KPI.spend ? META_KPI.spend : 0);
   const hasAnyAdCost = (g && g.cost > 0) || (META_KPI && META_KPI.spend > 0);
   const cpoMetaParts = [];
   if (g && g.cost > 0)               cpoMetaParts.push('Google');
   if (META_KPI && META_KPI.spend > 0) cpoMetaParts.push('Meta');
-  const cpoMeta = cpoMetaParts.length ? `blended (${cpoMetaParts.join(' + ')}) / GA4 orders`
+  const orderSource = (shopTx != null) ? 'Shopify' : 'GA4';
+  const cpoMeta = cpoMetaParts.length ? `(${cpoMetaParts.join(' + ')}) / ${orderSource} orders`
                                       : 'pending ad cost data';
-  const costPerOrder = (hasAnyAdCost && c.ecommercePurchases > 0)
-    ? fmtMoney(adSpend / c.ecommercePurchases) : '—';
+  const costPerOrder = (hasAnyAdCost && txDisplay > 0)
+    ? fmtMoney(adSpend / txDisplay) : '—';
 
   const rows = [
     ['active_users',     'Active users',     fmtNum(c.activeUsers),       deltaPct(c.activeUsers, p.activeUsers),         vsPrior, '', ''],
     ['engaged_sessions', 'Engaged sessions', fmtNum(c.engagedSessions),   deltaPct(c.engagedSessions, p.engagedSessions), vsPrior, '', ''],
     ['engagement_rate',  'Engagement rate',  (c.engagementRate * 100).toFixed(1) + '%',
       deltaPctPts(c.engagementRate * 100, p.engagementRate * 100, 'pp'), vsPrior, '', ''],
-    ['purchase_revenue', 'Purchase revenue', fmtMoney(c.purchaseRevenue), deltaPct(c.purchaseRevenue, p.purchaseRevenue), vsPrior, '', ''],
-    ['transactions',     'Transactions',     fmtNum(c.ecommercePurchases),deltaPct(c.ecommercePurchases, p.ecommercePurchases), vsPrior, '', ''],
-    ['aov',              'AOV',              fmtMoney(c.averagePurchaseRevenue),
-      deltaAbs(c.averagePurchaseRevenue, p.averagePurchaseRevenue, CURRENCY.symbol), vsPrior, '', ''],
+    ['purchase_revenue', 'Purchase revenue', fmtMoney(revDisplay), deltaPct(revDisplay, p.purchaseRevenue), revMeta, '', ''],
+    ['transactions',     'Transactions',     fmtNum(txDisplay),    deltaPct(txDisplay, p.ecommercePurchases), txMeta, '', ''],
+    ['aov',              'AOV',              fmtMoney(aovDisplay),
+      deltaAbs(aovDisplay, p.averagePurchaseRevenue, CURRENCY.symbol), vsPrior, '', ''],
     ['cost_per_order',   'Cost / order',     costPerOrder, '', cpoMeta, '', ''],
     ['avg_cpc',          'Avg. CPC',         avgCpc,       '', gMeta, '', ''],
     ['google_cost',      'Google Ads cost',  googleCost,   '', gMeta, '', ''],
     ['roas',             'Google ROAS',      googleRoas,   '', gMeta, '', ''],
     ['google_cpm',       'Google CPM',       googleCpm,    '', gMeta, '', ''],
     ['blended_cpm',      'Blended CPM',      blendedCpm,   '', blendedCpmMeta, '', ''],
-    ['purchase_rate',    'Purchase rate',    (c.purchaseRate * 100).toFixed(2) + '%', '',
-      'transactions / sessions', '', ''],
+    ['purchase_rate',    'Purchase rate',    prDisplay.toFixed(2) + '%', '', prMeta, '', ''],
     ['brand_mentions',   'Brand mentions',   String(countMentions(days)), '', `last ${days}d (auto)`, '', '']
   ];
 
@@ -220,50 +240,68 @@ function pullGA4Kpis(days) {
 // ============================ GA4: Organic vs Paid summary ============================
 
 function pullGA4OvpSummary(days) {
-  // Pull both source and medium so we can catch un-UTM'd Meta ad clicks
-  // (logged as `referral` from facebook/instagram domains).
+  // Sessions still come from GA4 (only source for session counts across mediums), split
+  // by isPaidTraffic. But for ORDERS and REVENUE we reconcile across three sources:
+  //   - Total orders + revenue  → Shopify (ground truth; GA4 pixel undercounts on Shopify)
+  //   - Paid orders             → Meta.purchases + Google.conversions (platform attribution)
+  //   - Paid revenue            → Meta.attributedRevenue + Google.conversionsValue
+  //   - Organic                 → total − paid  (never negative — caps at 0)
+  // When Shopify isn't configured, falls back to GA4 for totals.
+
   const rep = ga4RunReport({
     dimensions: ['sessionSource', 'sessionMedium'],
     metrics: ['sessions', 'purchaseRevenue', 'ecommercePurchases'],
     daysBack: days
   });
 
-  // Sum the totals first (across all sessions), then derive organic = total − paid.
-  // Guarantees Organic + Paid == Total and the % labels sum to 100% — matches
-  // Kevin's definition: organic sales = all sales minus sales from ads.
-  let total = { sessions: 0, revenue: 0, transactions: 0 };
-  let paid  = { sessions: 0, revenue: 0, transactions: 0 };
-
+  let ga4Total = { sessions: 0, revenue: 0, transactions: 0 };
+  let ga4Paid  = { sessions: 0, revenue: 0, transactions: 0 };
   rep.rows.forEach(r => {
     const source = r.dimensions[0];
     const medium = r.dimensions[1];
     const sess = Number(r.metrics[0]);
     const rev = Number(r.metrics[1]);
     const tx = Number(r.metrics[2]);
-    total.sessions += sess; total.revenue += rev; total.transactions += tx;
+    ga4Total.sessions += sess; ga4Total.revenue += rev; ga4Total.transactions += tx;
     if (isPaidTraffic(source, medium)) {
-      paid.sessions += sess; paid.revenue += rev; paid.transactions += tx;
+      ga4Paid.sessions += sess; ga4Paid.revenue += rev; ga4Paid.transactions += tx;
     }
   });
 
-  const organic = {
-    sessions:     total.sessions     - paid.sessions,
-    revenue:      total.revenue      - paid.revenue,
-    transactions: total.transactions - paid.transactions
-  };
+  // --- Reconciled totals ---
+  const totalRev = SHOPIFY_KPI ? SHOPIFY_KPI.revenue : ga4Total.revenue;
+  const totalTx  = SHOPIFY_KPI ? SHOPIFY_KPI.orders  : ga4Total.transactions;
 
-  const orgPct  = total.revenue > 0 ? Math.round(organic.revenue / total.revenue * 100) : 0;
-  const paidPct = total.revenue > 0 ? 100 - orgPct : 0;  // guaranteed to sum to 100
+  // --- Reconciled paid (platform-attributed, capped at total to avoid negatives) ---
+  const metaPurchases = META_KPI && META_KPI.purchases ? META_KPI.purchases : 0;
+  const metaRevenue   = META_KPI && META_KPI.spend && META_KPI.roas != null
+    ? META_KPI.spend * META_KPI.roas
+    : (META_KPI && META_KPI.revenue ? META_KPI.revenue : 0);
+  const googlePurchases = GOOGLE_ADS_KPI && GOOGLE_ADS_KPI.conversions ? GOOGLE_ADS_KPI.conversions : 0;
+  const googleRevenue   = GOOGLE_ADS_KPI && GOOGLE_ADS_KPI.revenue ? GOOGLE_ADS_KPI.revenue : 0;
+
+  const paidTx  = Math.min(metaPurchases + googlePurchases, totalTx);
+  const paidRev = Math.min(metaRevenue + googleRevenue, totalRev);
+
+  const organicTx  = Math.max(0, totalTx  - paidTx);
+  const organicRev = Math.max(0, totalRev - paidRev);
+
+  // Sessions: still GA4-based (Shopify doesn't track sessions).
+  const paidSess    = ga4Paid.sessions;
+  const organicSess = Math.max(0, ga4Total.sessions - ga4Paid.sessions);
+
+  const orgPct  = totalRev > 0 ? Math.round(organicRev / totalRev * 100) : 0;
+  const paidPct = totalRev > 0 ? 100 - orgPct : 0;
 
   writeTabReplace(tabName('OvpSummary', days),
     ['class', 'revenue', 'sub', 'sessions', 'transactions', 'cvr', 'rev_per_session'],
     [
-      ['Organic', organic.revenue, `${orgPct}% of total`, organic.sessions, organic.transactions,
-        organic.sessions ? (organic.transactions / organic.sessions * 100) : 0,
-        organic.sessions ? (organic.revenue / organic.sessions) : 0],
-      ['Paid',    paid.revenue,    `${paidPct}% of total`, paid.sessions,    paid.transactions,
-        paid.sessions    ? (paid.transactions / paid.sessions * 100) : 0,
-        paid.sessions    ? (paid.revenue / paid.sessions) : 0]
+      ['Organic', organicRev, `${orgPct}% of total`, organicSess, organicTx,
+        organicSess ? (organicTx / organicSess * 100) : 0,
+        organicSess ? (organicRev / organicSess) : 0],
+      ['Paid',    paidRev,    `${paidPct}% of total`, paidSess,    paidTx,
+        paidSess    ? (paidTx  / paidSess * 100) : 0,
+        paidSess    ? (paidRev / paidSess) : 0]
     ]);
 }
 
@@ -678,7 +716,14 @@ function pullMeta(days) {
 
   // --- Ad performance ---
   const timeRange = encodeURIComponent(JSON.stringify({ since: since, until: until }));
-  const url = `https://graph.facebook.com/v19.0/${accountId}/insights?fields=spend,impressions,clicks,ctr,cpm,reach,frequency,purchase_roas,actions&time_range=${timeRange}&access_token=${encodeURIComponent(token)}`;
+  // Match Business Suite by pinning the attribution window. Meta API's default is the
+  // ad account's setting which is often stricter (e.g. 1d_click) than what BS displays
+  // by default (7d_click + 1d_view). Overridable via Script Property META_ATTRIBUTION_WINDOWS
+  // (JSON array), e.g. '["7d_click"]' or '["7d_click","1d_view"]'.
+  const attribOverride = PropertiesService.getScriptProperties().getProperty('META_ATTRIBUTION_WINDOWS');
+  const attribWindows = attribOverride ? JSON.parse(attribOverride) : ['7d_click', '1d_view'];
+  const attribParam = encodeURIComponent(JSON.stringify(attribWindows));
+  const url = `https://graph.facebook.com/v19.0/${accountId}/insights?fields=spend,impressions,clicks,ctr,cpm,reach,frequency,purchase_roas,actions&time_range=${timeRange}&action_attribution_windows=${attribParam}&access_token=${encodeURIComponent(token)}`;
   const resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
   const json = JSON.parse(resp.getContentText());
   const d = (json.data && json.data[0]) || {};
@@ -729,8 +774,9 @@ function pullMeta(days) {
 
   writeTabReplace(tabName('MetaKpis', days), HEADERS, [].concat(adRows, followerRows));
 
-  // Stash totals so pullGA4Kpis() can compute the blended (Google + Meta) cost/order.
-  META_KPI = { spend: spend, purchases: purchases, impressions: impressions };
+  // Stash totals so pullGA4Kpis() can compute the blended (Google + Meta) cost/order,
+  // and so pullGA4OvpSummary() can attribute paid revenue via Meta ROAS.
+  META_KPI = { spend: spend, purchases: purchases, impressions: impressions, roas: roas, revenue: spend * roas };
 }
 
 /**
@@ -999,6 +1045,78 @@ function pullGoogleAdsCampaigns() {
   GOOGLE_ADS_KPI = { cost: totCost, clicks: totClicks, conversions: totConv, revenue: totRevenue, impressions: totImps };
   console.log(`pullGoogleAdsCampaigns: wrote ${rows.length} campaign rows ` +
     `(30d spend ${fmtMoney(totCost)}, ${totConv} conversions)`);
+}
+
+// ============================ Shopify (ground-truth orders + revenue) ============================
+//
+// GA4's ecommerce tracking on Shopify is unreliable (ad-blockers, consent refusals, iOS ITP,
+// Shopify SPA quirks — typically undercounts by 50-75%). Shopify itself is the source of truth
+// for how many orders happened and how much revenue was collected. The dashboard uses Shopify
+// for totals and platform-attribution for paid buckets.
+//
+// TO ACTIVATE:
+//   1. Shopify Admin → Settings → Apps and sales channels → Develop apps → Create an app
+//   2. Configure Admin API scopes: read_orders (and read_all_orders if pulling >60d windows)
+//   3. Install → copy the Admin API access token (starts with "shpat_")
+//   4. Apps Script → Project Settings (⚙) → Script Properties → add:
+//        SHOPIFY_SHOP  = your shop handle (the part before .myshopify.com — e.g. "fitasy-ai")
+//        SHOPIFY_TOKEN = the shpat_... token
+//   See SHOPIFY_SETUP.md.
+
+function pullShopify(days) {
+  const props = PropertiesService.getScriptProperties();
+  const shop = (props.getProperty('SHOPIFY_SHOP') || '').trim();
+  const token = props.getProperty('SHOPIFY_TOKEN');
+  if (!shop || !token) {
+    console.log(`pullShopify(${days}): skipped (SHOPIFY_SHOP / SHOPIFY_TOKEN not set)`);
+    return;
+  }
+
+  const since = CUSTOM_RANGE ? CUSTOM_RANGE.startDate
+    : Utilities.formatDate(new Date(Date.now() - days * 86400000), 'UTC', 'yyyy-MM-dd');
+  const until = CUSTOM_RANGE ? CUSTOM_RANGE.endDate
+    : Utilities.formatDate(new Date(), 'UTC', 'yyyy-MM-dd');
+
+  // ISO 8601 boundaries — inclusive start, exclusive end + 1 day to catch full range.
+  const untilPlus = Utilities.formatDate(
+    new Date(new Date(until + 'T00:00:00Z').getTime() + 86400000), 'UTC', 'yyyy-MM-dd');
+  const params = [
+    'status=any',
+    'financial_status=paid',
+    `created_at_min=${since}T00:00:00Z`,
+    `created_at_max=${untilPlus}T00:00:00Z`,
+    'fields=id,total_price,current_total_price,financial_status,created_at,cancelled_at,test',
+    'limit=250'
+  ].join('&');
+
+  const headers = { 'X-Shopify-Access-Token': token };
+  const base = `https://${shop}.myshopify.com/admin/api/2024-10/orders.json?${params}`;
+
+  let allOrders = [];
+  let url = base;
+  let pageGuard = 0; // paranoia cap — one small brand shouldn't hit this
+  while (url && pageGuard++ < 40) {
+    const resp = UrlFetchApp.fetch(url, { method: 'get', headers: headers, muteHttpExceptions: true });
+    const code = resp.getResponseCode();
+    if (code !== 200) {
+      console.warn(`pullShopify HTTP ${code} — ${resp.getContentText().slice(0, 500)}`);
+      return;
+    }
+    const json = JSON.parse(resp.getContentText());
+    allOrders = allOrders.concat(json.orders || []);
+    // Shopify paginates via Link header (rel="next"); parse it.
+    const link = resp.getHeaders()['Link'] || resp.getHeaders()['link'] || '';
+    const nextMatch = link.match(/<([^>]+)>;\s*rel="next"/);
+    url = nextMatch ? nextMatch[1] : null;
+  }
+
+  // Filter out test + cancelled orders (they show up even with status=any/paid).
+  const real = allOrders.filter(o => !o.test && !o.cancelled_at);
+  const orderCount = real.length;
+  const revenue = real.reduce((s, o) => s + Number(o.current_total_price || o.total_price || 0), 0);
+
+  SHOPIFY_KPI = { orders: orderCount, revenue: revenue };
+  console.log(`pullShopify(${days}): ${orderCount} orders, ${fmtMoney(revenue)} revenue`);
 }
 
 // ============================ Sentiment + Mentions (from existing sheet) ============================
@@ -1292,9 +1410,9 @@ function buildCustomReport(startDate, endDate) {
     // Google Ads first so GOOGLE_ADS_KPI is set before pullGA4Kpis reads it.
     try { pullGoogleAdsCampaigns(); } catch (err) { console.error('custom pullGoogleAdsCampaigns:', err); }
 
-    // Meta first so META_KPI is set before pullGA4Kpis builds the blended cost/order row.
+    // Shopify + Meta first so their globals are set before OvpSummary / GA4Kpis read them.
     const steps = [
-      pullMeta,
+      pullShopify, pullMeta,
       pullGA4Kpis, pullGA4OvpSummary, pullGA4OvpChannels, pullGA4ChannelMix,
       pullGA4Trend, pullGA4TopPages, pullGA4DemoAge, pullGA4DemoGender,
       pullGA4Geo, pullGA4Funnel, pullGA4Quality, pullGA4Products, pullGA4Pillars
@@ -1309,6 +1427,7 @@ function buildCustomReport(startDate, endDate) {
     CAPTURE = null;
     GOOGLE_ADS_KPI = null;
     META_KPI = null;
+    SHOPIFY_KPI = null;
   }
 }
 
