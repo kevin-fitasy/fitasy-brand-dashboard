@@ -692,10 +692,13 @@ function pullMeta(days) {
     return;
   }
 
+  // "Last N days" convention: exclude today's partial data so the window matches
+  // Looker Studio / GA4 / Meta UI, which all end at yesterday. Meta's time_range is
+  // inclusive on both ends, so [today-N, today-1] gives N full days.
   const since = CUSTOM_RANGE ? CUSTOM_RANGE.startDate
     : Utilities.formatDate(new Date(Date.now() - days * 86400000), 'UTC', 'yyyy-MM-dd');
   const until = CUSTOM_RANGE ? CUSTOM_RANGE.endDate
-    : Utilities.formatDate(new Date(), 'UTC', 'yyyy-MM-dd');
+    : Utilities.formatDate(new Date(Date.now() - 86400000), 'UTC', 'yyyy-MM-dd');
 
   // --- Detect the ad account's denominated currency (so fmtMoney shows the right
   //     symbol — Meta returns spend in account currency, not always USD). ---
@@ -1072,10 +1075,13 @@ function pullShopify(days) {
     return;
   }
 
+  // "Last N days" convention: end at yesterday (exclude today's partial data) so the
+  // window matches Looker Studio / GA4 / Meta UI conventions and the Shopify totals
+  // align to what Meta shows for the same range.
   const since = CUSTOM_RANGE ? CUSTOM_RANGE.startDate
     : Utilities.formatDate(new Date(Date.now() - days * 86400000), 'UTC', 'yyyy-MM-dd');
   const until = CUSTOM_RANGE ? CUSTOM_RANGE.endDate
-    : Utilities.formatDate(new Date(), 'UTC', 'yyyy-MM-dd');
+    : Utilities.formatDate(new Date(Date.now() - 86400000), 'UTC', 'yyyy-MM-dd');
 
   // ISO 8601 boundaries — inclusive start, exclusive end + 1 day to catch full range.
   const untilPlus = Utilities.formatDate(
