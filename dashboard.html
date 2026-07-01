@@ -459,6 +459,8 @@
       <button class="pill period-pill" data-period="7">7 Days</button>
       <button class="pill period-pill active" data-period="30">30 Days</button>
       <button class="pill period-pill" data-period="90">90 Days</button>
+      <button class="pill period-pill" data-quick="thisweek">This Week</button>
+      <button class="pill period-pill" data-quick="lastweek">Last Week</button>
       <button class="pill period-pill" data-quick="thismonth">This Month</button>
       <button class="pill period-pill" data-quick="lastmonth">Last Month</button>
       <button class="pill period-pill" id="custom-toggle">Custom ▾</button>
@@ -1506,6 +1508,21 @@
                                         : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
     return { start: ymd(start), end: ymd(end) };
   }
+  // ISO-week (Mon–Sun) presets — match Looker Studio's weekly view exactly.
+  // "This Week" = Monday of current ISO week → today
+  // "Last Week" = full previous ISO week (Monday–Sunday)
+  function weekRange(which) {
+    const now = new Date();
+    const dow = now.getUTCDay() || 7; // 1=Mon … 7=Sun
+    const thisMonMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - (dow - 1));
+    const startMs = (which === 'lastweek') ? thisMonMs - 7 * 86400000 : thisMonMs;
+    const endMs   = (which === 'lastweek') ? startMs + 6 * 86400000
+                                            : Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    return { start: ymd(new Date(startMs)), end: ymd(new Date(endMs)) };
+  }
+  function quickRange(which) {
+    return (which === 'thisweek' || which === 'lastweek') ? weekRange(which) : monthRange(which);
+  }
 
   function bindPeriodPills() {
     const customRangeBox = document.getElementById('custom-range');
@@ -1528,7 +1545,7 @@
     // Quick month ranges (live query)
     document.querySelectorAll('.period-pill[data-quick]').forEach(btn => {
       btn.addEventListener('click', () => {
-        const r = monthRange(btn.dataset.quick);
+        const r = quickRange(btn.dataset.quick);
         CUSTOM_MODE = true;
         CUSTOM_DATES = r;
         CUSTOM_LABEL = btn.textContent.trim();
