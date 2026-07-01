@@ -64,14 +64,17 @@ function setCurrency(code) {
   if (CURRENCY_SYMBOLS[c]) CURRENCY = { code: c, symbol: CURRENCY_SYMBOLS[c] };
 }
 
-// ---- Custom date-range mode (used by the doGet web app for the dashboard's custom picker) ----
+// ---- Custom date-range mode ----
 // When CUSTOM_RANGE is set, every pull function computes against an explicit start/end
-// instead of "N days ago", and tabName() drops the _Nd suffix.
-// When CAPTURE is set, writeTabReplace() collects results in memory instead of writing
-// to the sheet. Both are null during the normal hourly pullAll() run.
-//   CUSTOM_RANGE = { startDate, endDate, prevStartDate, prevEndDate, days }
+// instead of "N days ago".
+// tabName() behavior:
+//   - CUSTOM_SUFFIX set   → returns `${base}_${CUSTOM_SUFFIX}` (writes to sheet)
+//   - CAPTURE set         → returns base (in-memory capture; used by the doGet web app)
+//   - neither set         → returns base (fallback)
+// CAPTURE + CUSTOM_SUFFIX are mutually exclusive.
 var CUSTOM_RANGE = null;
 var CAPTURE = null;
+var CUSTOM_SUFFIX = null;
 
 // ============================ ENTRYPOINT ============================
 
@@ -106,6 +109,16 @@ function pullAll() {
     try { pullGA4Pillars(days); }      catch (e) { console.error(`pullGA4Pillars(${days}):`, e); }
   });
 
+  // Calendar-week and calendar-month presets — pre-compute so the dashboard's
+  // "This Week / Last Week / This Month / Last Month" pills work with zero web-app
+  // dependency (they just read _thisweek / _lastweek / _thismonth / _lastmonth tabs).
+  ['thisweek', 'lastweek', 'thismonth', 'lastmonth'].forEach(key => {
+    try {
+      const r = calendarRangeUTC(key);
+      if (r) runPullsForRange(r.start, r.end, key);
+    } catch (e) { console.error(`preset ${key}:`, e); }
+  });
+
   // Period-agnostic data sources
   try { pullSentiment(); }          catch (e) { console.error('pullSentiment:', e); }
   try { pullMentions(); }           catch (e) { console.error('pullMentions:', e); }
@@ -117,8 +130,13 @@ function pullAll() {
 }
 
 // Helper: build period-suffixed tab name.
-// In custom-range mode there is no _Nd suffix — results are captured in memory by base name.
-function tabName(base, days) { return CUSTOM_RANGE ? base : `${base}_${days}d`; }
+// - Regular period loop: `${base}_${days}d` (e.g. KPIs_30d)
+// - Weekly presets on the sheet: `${base}_${CUSTOM_SUFFIX}` (e.g. KPIs_lastweek)
+// - Web-app custom range: `${base}` (in-memory capture, no suffix)
+function tabName(base, days) {
+  if (CUSTOM_RANGE) return CUSTOM_SUFFIX ? `${base}_${CUSTOM_SUFFIX}` : base;
+  return `${base}_${days}d`;
+}
 
 // ============================ CONFIG TAB ============================
 
@@ -1458,6 +1476,69 @@ function priorRangeOf(start, end) {
 function testCustomReport() {
   const r = buildCustomReport('2026-04-01', '2026-04-30');
   console.log('Captured tabs: ' + Object.keys(r).join(', '));
+}
+
+// ============================ CALENDAR PRESETS (weekly + monthly, precomputed) ============================
+
+// Compute the ISO-week or calendar-month range in UTC. Matches Looker Studio's
+// week (Mon–Sun) and month (1st–last) groupings so numbers reconcile.
+function calendarRangeUTC(key) {
+  const now = new Date();
+  const fmt = (ms) => Utilities.formatDate(new Date(ms), 'UTC', 'yyyy-MM-dd');
+  const y = now.getUTCFullYear(), mo = now.getUTCMonth(), d = now.getUTCDate();
+
+  if (key === 'thisweek' || key === 'lastweek') {
+    const dow = now.getUTCDay() || 7; // 1..7 (Mon=1, Sun=7)
+    const thisMonMs = Date.UTC(y, mo, d - (dow - 1));
+    if (key === 'lastweek') {
+      const start = thisMonMs - 7 * 86400000;
+      const end   = start + 6 * 86400000;
+      return { start: fmt(start), end: fmt(end) };
+    }
+    // thisweek: Mon → today (partial). If today is Monday, single-day window.
+    return { start: fmt(thisMonMs), end: fmt(Date.UTC(y, mo, d)) };
+  }
+  if (key === 'thismonth' || key === 'lastmonth') {
+    let ym = mo, yy = y;
+    if (key === 'lastmonth') { ym -= 1; if (ym < 0) { ym = 11; yy -= 1; } }
+    const start = Date.UTC(yy, ym, 1);
+    const end   = (key === 'lastmonth') ? Date.UTC(yy, ym + 1, 0)   // last day of that month
+                                        : Date.UTC(y, mo, d);        // today
+    return { start: fmt(start), end: fmt(end) };
+  }
+  return null;
+}
+
+// Runs every period-dependent pull for an explicit date range and writes the
+// output to sheet tabs suffixed `_${suffix}` (e.g. KPIs_lastweek, MetaKpis_lastweek).
+// Shares the same CUSTOM_RANGE date-injection path as buildCustomReport, but writes
+// to the sheet rather than capturing in memory.
+function runPullsForRange(startDate, endDate, suffix) {
+  const span = daysBetweenInclusive(startDate, endDate);
+  const prev = priorRangeOf(startDate, endDate);
+  CUSTOM_RANGE = { startDate, endDate, prevStartDate: prev.start, prevEndDate: prev.end, days: span };
+  CUSTOM_SUFFIX = suffix;
+  console.log(`--- Preset: ${suffix} (${startDate} → ${endDate}, ${span} days) ---`);
+  try {
+    // Meta first so META_KPI is available for pullGA4Kpis's blended cost/order.
+    try { pullMeta(span); }            catch (e) { console.error(`${suffix} pullMeta:`, e); }
+    try { pullGA4Kpis(span); }         catch (e) { console.error(`${suffix} pullGA4Kpis:`, e); }
+    try { pullGA4OvpSummary(span); }   catch (e) { console.error(`${suffix} pullGA4OvpSummary:`, e); }
+    try { pullGA4OvpChannels(span); }  catch (e) { console.error(`${suffix} pullGA4OvpChannels:`, e); }
+    try { pullGA4ChannelMix(span); }   catch (e) { console.error(`${suffix} pullGA4ChannelMix:`, e); }
+    try { pullGA4Trend(span); }        catch (e) { console.error(`${suffix} pullGA4Trend:`, e); }
+    try { pullGA4TopPages(span); }     catch (e) { console.error(`${suffix} pullGA4TopPages:`, e); }
+    try { pullGA4DemoAge(span); }      catch (e) { console.error(`${suffix} pullGA4DemoAge:`, e); }
+    try { pullGA4DemoGender(span); }   catch (e) { console.error(`${suffix} pullGA4DemoGender:`, e); }
+    try { pullGA4Geo(span); }          catch (e) { console.error(`${suffix} pullGA4Geo:`, e); }
+    try { pullGA4Funnel(span); }       catch (e) { console.error(`${suffix} pullGA4Funnel:`, e); }
+    try { pullGA4Quality(span); }      catch (e) { console.error(`${suffix} pullGA4Quality:`, e); }
+    try { pullGA4Products(span); }     catch (e) { console.error(`${suffix} pullGA4Products:`, e); }
+    try { pullGA4Pillars(span); }      catch (e) { console.error(`${suffix} pullGA4Pillars:`, e); }
+  } finally {
+    CUSTOM_RANGE = null;
+    CUSTOM_SUFFIX = null;
+  }
 }
 
 // ============================ DIAGNOSTIC: traffic-source classification ============================

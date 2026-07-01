@@ -459,10 +459,10 @@
       <button class="pill period-pill" data-period="7">7 Days</button>
       <button class="pill period-pill active" data-period="30">30 Days</button>
       <button class="pill period-pill" data-period="90">90 Days</button>
-      <button class="pill period-pill" data-quick="thisweek">This Week</button>
-      <button class="pill period-pill" data-quick="lastweek">Last Week</button>
-      <button class="pill period-pill" data-quick="thismonth">This Month</button>
-      <button class="pill period-pill" data-quick="lastmonth">Last Month</button>
+      <button class="pill period-pill" data-period="thisweek">This Week</button>
+      <button class="pill period-pill" data-period="lastweek">Last Week</button>
+      <button class="pill period-pill" data-period="thismonth">This Month</button>
+      <button class="pill period-pill" data-period="lastmonth">Last Month</button>
       <button class="pill period-pill" id="custom-toggle">Custom ▾</button>
     </span>
     <span class="custom-range" id="custom-range" hidden>
@@ -893,26 +893,41 @@
   let CUSTOM_DATES = { start: null, end: null };  // 'YYYY-MM-DD'
   let CUSTOM_LABEL = '';                          // human label e.g. "This Month" or "Apr 1 – Apr 30"
 
+  // Suffix used in sheet tab names for the active period.
+  // - Numeric period (7/30/90) → `${N}d` (e.g. KPIs_30d)
+  // - String preset (thisweek/lastweek/thismonth/lastmonth) → the key itself (e.g. KPIs_lastweek)
+  function periodSuffix() {
+    return typeof CURRENT_PERIOD === 'number' ? `${CURRENT_PERIOD}d` : String(CURRENT_PERIOD);
+  }
   // Period-suffixed tabs (rebuilt per period) vs period-agnostic tabs (fetched once)
   function PERIODED_TABS() {
-    const p = CURRENT_PERIOD;
+    const s = periodSuffix();
     return {
-      kpis:        `KPIs_${p}d`,
-      ovpSummary:  `OvpSummary_${p}d`,
-      ovpChannels: `OvpChannels_${p}d`,
-      channels:    `ChannelMix_${p}d`,
-      trend:       `Trend_${p}d`,
-      pages:       `TopPages_${p}d`,
-      demoAge:     `DemoAge_${p}d`,
-      demoGender:  `DemoGender_${p}d`,
-      geoCountry:  `GeoCountry_${p}d`,
-      geoRegion:   `GeoRegion_${p}d`,
-      metaKpis:    `MetaKpis_${p}d`,
-      funnel:      `Funnel_${p}d`,
-      quality:     `Quality_${p}d`,
-      products:    `Products_${p}d`,
-      pillars:     `Pillars_${p}d`
+      kpis:        `KPIs_${s}`,
+      ovpSummary:  `OvpSummary_${s}`,
+      ovpChannels: `OvpChannels_${s}`,
+      channels:    `ChannelMix_${s}`,
+      trend:       `Trend_${s}`,
+      pages:       `TopPages_${s}`,
+      demoAge:     `DemoAge_${s}`,
+      demoGender:  `DemoGender_${s}`,
+      geoCountry:  `GeoCountry_${s}`,
+      geoRegion:   `GeoRegion_${s}`,
+      metaKpis:    `MetaKpis_${s}`,
+      funnel:      `Funnel_${s}`,
+      quality:     `Quality_${s}`,
+      products:    `Products_${s}`,
+      pillars:     `Pillars_${s}`
     };
+  }
+  // Human-readable label for the active period (used in headings/subtitles/status).
+  function periodLabelForKey(key) {
+    if (typeof key === 'number') return `Last ${key} Days`;
+    if (key === 'thisweek')  return 'This Week';
+    if (key === 'lastweek')  return 'Last Week';
+    if (key === 'thismonth') return 'This Month';
+    if (key === 'lastmonth') return 'Last Month';
+    return String(key);
   }
   const STATIC_TABS = {
     config:    'Config',
@@ -1353,7 +1368,7 @@
 
   // The active-period label: "Last N Days" for presets, the custom label otherwise.
   function periodLabelText() {
-    return CUSTOM_MODE ? CUSTOM_LABEL : `Last ${CURRENT_PERIOD} Days`;
+    return CUSTOM_MODE ? CUSTOM_LABEL : periodLabelForKey(CURRENT_PERIOD);
   }
 
   // Swap the period phrase in section meta labels. Each element's original text is
@@ -1371,7 +1386,7 @@
     (rows || []).forEach(r => { if (r.key) map[r.key] = r.value; });
     const subEl = document.querySelector('[data-banner="sub"]');
     if (subEl) {
-      const period = CUSTOM_MODE ? CUSTOM_LABEL : `Last ${CURRENT_PERIOD} days`;
+      const period = CUSTOM_MODE ? CUSTOM_LABEL : periodLabelForKey(CURRENT_PERIOD);
       const syncedPart = map.synced ? ` · synced ${map.synced}` : '';
       subEl.textContent = `${period}${syncedPart} · GA4 + Google Ads + Shopify + Klaviyo`;
     }
@@ -1419,7 +1434,7 @@
 
   // ============== MAIN ==============
   async function init() {
-    setStatus('stale', CUSTOM_MODE ? `Fetching ${CUSTOM_LABEL}… (live query, ~20–40s)` : `Fetching ${CURRENT_PERIOD}-day data…`);
+    setStatus('stale', CUSTOM_MODE ? `Fetching ${CUSTOM_LABEL}… (live query, ~20–40s)` : `Fetching ${periodLabelForKey(CURRENT_PERIOD).toLowerCase()} data…`);
 
     // Static (period-agnostic) tabs always come from the sheet.
     const staticPromise = Promise.all([
@@ -1478,11 +1493,11 @@
     if (CUSTOM_MODE) {
       setStatus(fetched ? 'live' : 'error', fetched ? `Live · ${CUSTOM_LABEL}` : 'No data for the selected range');
     } else if (fetched === 0) {
-      setStatus('error', `No ${CURRENT_PERIOD}d tabs found — run pullAll() in Apps Script`);
+      setStatus('error', `No ${periodSuffix()} tabs found — run pullAll() in Apps Script`);
     } else if (fetched < 4) {
-      setStatus('stale', `${fetched}/4 core ${CURRENT_PERIOD}d tabs loaded`);
+      setStatus('stale', `${fetched}/4 core ${periodSuffix()} tabs loaded`);
     } else {
-      setStatus('live', `Live · ${CURRENT_PERIOD}-day view`);
+      setStatus('live', `Live · ${periodLabelForKey(CURRENT_PERIOD)}`);
     }
   }
 
@@ -1531,7 +1546,8 @@
     // Fixed presets (instant, pre-computed tabs)
     document.querySelectorAll('.period-pill[data-period]').forEach(btn => {
       btn.addEventListener('click', () => {
-        const p = parseInt(btn.dataset.period, 10);
+        const raw = btn.dataset.period;
+        const p = /^\d+$/.test(raw) ? parseInt(raw, 10) : raw;  // number for 7/30/90, string for weekly/monthly presets
         if (!CUSTOM_MODE && p === CURRENT_PERIOD) return;
         CUSTOM_MODE = false;
         CURRENT_PERIOD = p;
